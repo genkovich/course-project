@@ -1,0 +1,97 @@
+ @disregard
+// --- ~/.claude/settings.json ---
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+
+  // --- Модель і reasoning (детально в уроці 3.6) ---
+  "model": "sonnet",
+  "effortLevel": "medium", 
+  "availableModels": ["sonnet", "opus", "haiku"],
+  "modelOverrides": { // замінити модель для конкретних підагентів/задач.
+        "Explore": "haiku",   // розвідка дешевою моделлю
+        "Plan": "opus"        // планування розумною
+  },
+  "alwaysThinkingEnabled": false, // кожна відповідь з "роздумами"
+
+  // --- Permissions (детально в уроці 3.7) ---
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [],
+    "ask": [],
+    "deny": [],
+    "additionalDirectories": ["~/shared-libs", "/tmp/scratch"], // додаткові директорії поза CWD, до яких Claude має доступ.
+    "disableBypassPermissionsMode": "disable"
+  },
+
+  // --- Sandbox ---
+  "sandbox": {
+    "enabled": true, // запускати команди в ізольованому середовищі.
+    "autoAllowBashIfSandboxed": true, // якщо команда у sandbox, не питати дозвіл.
+    "excludedCommands": ["docker"],
+    "filesystem": {
+        "allowWrite": ["~/projects/**"],
+        "denyWrite":  ["~/.ssh/**"],
+        "denyRead":   ["~/.aws/credentials"]
+    }, //  білий/чорний списки файлової системи в sandbox.
+    "network": { // мережеві обмеження sandbox.
+        "allowedDomains": ["api.github.com", "*.npmjs.org"],
+        "allowUnixSockets": ["/var/run/docker.sock"],
+        "allowLocalBinding": true
+    } 
+  },
+
+  // --- Hooks ---
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [{ "type": "command", "command": "prettier --write $CLAUDE_FILE" }]
+      }
+    ]
+  },
+
+  // --- Environment variables ---
+  "env": {},
+
+  // --- Персоналізація ---
+  "outputStyle": "Explanatory", //стиль відповідей (Default, Explanatory, Concise, Learning…).
+  "language": "ukrainian",
+  "voiceEnabled": true,
+  "attribution": { "commit": "", "pr": "" }, // підпис у комітах і PR.
+
+  // --- Проект ---
+  "includeGitInstructions": true,
+  "respectGitignore": true, // ігнорувати файли з .gitignore у Glob/Grep.
+  "cleanupPeriodDays": 30, // через скільки днів видаляти історію чатів.
+  "defaultShell": "bash", // zsh
+  "autoMemoryDirectory": "~/my-memory",
+  "plansDirectory": "~/.claude/plans", // куди зберігаються плани з plan mode.
+  "fileSuggestion": {},
+    "worktree": {
+    "sparsePaths": ["src/", "tests/"]                // sparse checkout
+  },
+  "statusLine": {},
+  "agent": "",
+
+
+  "autoUpdatesChannel": "stable",
+
+  // --- MCP ---
+  "enableAllProjectMcpServers": false,
+  "enabledMcpjsonServers": [],
+  "disabledMcpjsonServers": [],
+
+  // --- Plugins ---
+  "enabledPlugins": {},
+  "extraKnownMarketplaces": {},
+
+  // --- Auto mode ---
+  "autoMode": {},
+  "disableAutoMode": "",
+  "useAutoModeDuringPlan": true,
+
+  // --- Інше ---
+  "fastModePerSessionOptIn": false,
+  "showClearContextOnPlanAccept": true,
+  "disableAllHooks": false,
+}
