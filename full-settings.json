@@ -15,7 +15,7 @@
 
   // --- Permissions (детально в уроці 3.7) ---
   "permissions": {
-    "defaultMode": "acceptEdits",
+    "defaultMode": "auto",
     "allow": [],
     "ask": [],
     "deny": [],

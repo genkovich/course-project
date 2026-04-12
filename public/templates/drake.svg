@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#f5e6c8"/>
+  <rect x="0" y="0" width="300" height="300" fill="#fde2d1"/>
+  <rect x="0" y="300" width="300" height="300" fill="#d8ecd0"/>
+  <rect x="300" y="0" width="300" height="600" fill="#ffffff" stroke="#222" stroke-width="4"/>
+  <g font-family="sans-serif" fill="#222" text-anchor="middle">
+    <circle cx="150" cy="150" r="80" fill="#c9a063"/>
+    <text x="150" y="160" font-size="48" font-weight="700">NO</text>
+    <circle cx="150" cy="450" r="80" fill="#c9a063"/>
+    <text x="150" y="460" font-size="48" font-weight="700">YES</text>
+    <text x="450" y="40" font-size="20" fill="#666">Drake template</text>
+  </g>
+</svg>

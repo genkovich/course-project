@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#cfe7f5"/>
+  <g font-family="sans-serif" text-anchor="middle">
+    <circle cx="150" cy="350" r="90" fill="#e8b59a"/>
+    <text x="150" y="470" font-size="22" fill="#333">Boyfriend</text>
+    <circle cx="330" cy="350" r="90" fill="#f4cfa8"/>
+    <text x="330" y="470" font-size="22" fill="#333">Girlfriend</text>
+    <circle cx="500" cy="350" r="90" fill="#e8b59a"/>
+    <text x="500" y="470" font-size="22" fill="#333">Other girl</text>
+    <text x="300" y="60" font-size="22" fill="#666">Distracted Boyfriend template</text>
+  </g>
+</svg>

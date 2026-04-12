@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#9bc1a8"/>
+  <g font-family="sans-serif" text-anchor="middle">
+    <rect x="120" y="340" width="360" height="120" fill="#fff" stroke="#222" stroke-width="3"/>
+    <text x="300" y="400" font-size="26" font-weight="700" fill="#222">CHANGE</text>
+    <text x="300" y="440" font-size="26" font-weight="700" fill="#222">MY MIND</text>
+    <circle cx="300" cy="220" r="70" fill="#e8b879"/>
+    <rect x="260" y="280" width="80" height="60" fill="#3b5a7a"/>
+    <text x="300" y="60" font-size="22" fill="#333">Change My Mind template</text>
+  </g>
+</svg>

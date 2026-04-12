@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <rect width="600" height="600" fill="#f6d38a"/>
+  <g font-family="sans-serif" text-anchor="middle">
+    <rect x="60" y="380" width="480" height="160" fill="#a66a35"/>
+    <circle cx="300" cy="320" r="80" fill="#e8b879"/>
+    <rect x="240" y="290" width="120" height="40" fill="#b66a2a"/>
+    <path d="M 100 450 Q 140 380 180 450 Q 220 380 260 450 Q 300 380 340 450 Q 380 380 420 450 Q 460 380 500 450 Z" fill="#e85d1a" opacity="0.8"/>
+    <text x="300" y="60" font-size="22" fill="#333">This Is Fine template</text>
+  </g>
+</svg>
