@@ -81,9 +81,9 @@ fi
 # ─── 5. Next.js build ────────────────────────────────────────────────
 section "Next.js Build"
 
-BUILD_OUTPUT=$(npm run build 2>&1) || true
+BUILD_OUTPUT=$(npm run build 2>&1); BUILD_EXIT=$?
 
-if echo "$BUILD_OUTPUT" | grep -q "Build error"; then
+if [ "$BUILD_EXIT" -ne 0 ]; then
   if echo "$BUILD_OUTPUT" | grep -q "Failed to fetch.*from Google Fonts"; then
     pass "Build failed only due to network (Google Fonts unavailable in sandbox)"
   else
@@ -98,6 +98,7 @@ fi
 section "Database"
 
 TEST_DB="test_check.db"
+trap 'rm -f "$TEST_DB" "${TEST_DB}-wal" "${TEST_DB}-shm"' EXIT
 rm -f "$TEST_DB"
 
 DB_CHECK=$(node -e "
@@ -129,7 +130,7 @@ const count = db.prepare('SELECT COUNT(*) AS c FROM memes').get();
 if (count.c !== 1) throw new Error('Expected 1 meme, got ' + count.c);
 db.close();
 console.log('OK');
-" 2>&1)
+" 2>&1) || true
 
 rm -f "$TEST_DB" "${TEST_DB}-wal" "${TEST_DB}-shm"
 
