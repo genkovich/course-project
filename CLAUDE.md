@@ -5,7 +5,7 @@
 - `npm start` — start production server
 - `npm run lint` — run ESLint
 
-No test framework is configured. `test.sh` is a placeholder script, not a real test runner.
+No test framework is configured.
 
 ## Architecture
 
