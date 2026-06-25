@@ -47,7 +47,9 @@ This is the **"deterministic script vs agent explains, human applies"** split ma
    git tag v<new> && git push origin v<new>
    ```
 
-   The tag is the human's action; pushing it is what fires the release CI.
+   The tag is the human's action — but in this pipeline the authoritative tag is
+   cut by **gate 1** (`release.yml`) when the feature PR merges, so locally this
+   is a record/rehearsal of the same number, not the thing that fires CI.
 
 ## Definition of Done
 
