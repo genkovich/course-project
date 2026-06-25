@@ -83,10 +83,11 @@ git diff package.json                 # "version": 0.1.0 -> 0.2.0
 ```bash
 git push -u origin feat/meme-tags
 gh pr create --fill                   # PR feat/meme-tags -> main
+gh pr view feat/meme-tags --web       # open the PR in the browser
 ```
 
-In the browser, on the PR: **`version`** comments the proposed bump
-`0.1.0 → 0.2.0`, MINOR, naming the feat. Pure preview — it tags nothing.
+On the PR: **`version`** comments the proposed bump `0.1.0 → 0.2.0`, MINOR,
+naming the feat. Pure preview — it tags nothing.
 
 ---
 
@@ -122,15 +123,18 @@ Show the contrast as it goes:
 
 ```bash
 gh pr merge feat/meme-tags --squash   # merging the FEATURE PR is gate 1's trigger
+gh run watch                          # release.yml live: next-version → bump → tag v0.2.0
+                                      #   → changelog → notes → GitHub Release → Telegram
+gh release view v0.2.0 --web          # the published GitHub Release with the partner notes
+gh pr list --label gate:docs          # the docs/v0.2.0 PR gate 1 just opened (guide + shots)
 ```
 
-Then in the browser, **Actions → release**:
+What the run shows, in order:
 
 - next-version → bump → **tag `v0.2.0`** → changelog → notes
-- **Releases** → a published **GitHub Release** with the partner notes
-- **Telegram** → the announcement lands in the chat
-- **Pull requests** → a new **`docs/v0.2.0`** PR with the user guide + screenshots,
-  labeled `gate:docs`
+- a published **GitHub Release** with the partner notes (`gh release view … --web`)
+- the **Telegram** announcement lands in the chat
+- a new **`docs/v0.2.0`** PR with the user guide + screenshots, labeled `gate:docs`
 
 The line to say: gate 1 prepared everything and **opened a second PR** — the user
 docs wait for a human before they go anywhere public.
@@ -142,12 +146,14 @@ docs wait for a human before they go anywhere public.
 `🎬 live Actions, gate 2`
 
 ```bash
+gh pr view docs/v0.2.0 --web          # review the user guide as a human, then merge
 gh pr merge docs/v0.2.0 --squash      # merging the DOCS PR is gate 2's trigger
+gh run watch                          # docs-publish live: PUT each user-guide page → HTTP status
+open "$REDMINE_URL/projects/course-project/wiki/filtering-by-tag"   # the page now in the wiki
 ```
 
-Then in the browser, **Actions → docs-publish**: it PUTs each
-`docs/user-guide/*.md` page to the Redmine wiki. Open Redmine and show the pages
-appear.
+`docs-publish` PUTs each `docs/user-guide/*.md` page to the Redmine wiki; the
+last command opens the published page so the wiki appears on camera.
 
 > Rehearse gate 2 locally instead: `/publish-redmine` — it shows the exact
 > page→URL map and publishes only on your explicit yes.
