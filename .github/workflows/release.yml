@@ -1,0 +1,218 @@
+name: release
+on:
+  pull_request:
+    types: [closed]
+
+# GATE 1 — a feature PR merged into main. NOT a tag push and NOT push:main, so it
+# can never re-trigger itself: GITHUB_TOKEN pushes (the tag and main commit below)
+# do not fire workflows by GitHub policy, and opening the docs PR is `opened`, not
+# `closed`. The job runs the whole release inline: next-version → bump → tag →
+# changelog → notes → GitHub Release → Telegram → open the docs/vX.Y.Z PR. The
+# Redmine publish is a SEPARATE node (gate 2, docs-publish.yml) on the docs-PR merge.
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  gate1:
+    # Merged, and the source branch is a real feature — not a docs/* branch (that
+    # is gate 2's input) and not a release/* branch (housekeeping).
+    if: >-
+      github.event.pull_request.merged == true &&
+      !startsWith(github.event.pull_request.head.ref, 'docs/') &&
+      !startsWith(github.event.pull_request.head.ref, 'release/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BASE_REF: ${{ github.event.pull_request.base.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Claude Code CLI (stable)
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash -s stable
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Detect available secrets (guards for the outbound steps)
+        id: secrets
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          echo "anthropic=$([[ -n "$ANTHROPIC_API_KEY" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "telegram=$([[ -n "$TELEGRAM_BOT_TOKEN" && -n "$TELEGRAM_CHAT_ID" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Compute next version (deterministic, no LLM)
+        id: semver
+        run: |
+          next="$(./scripts/next-version.sh)"
+          last="$(git tag --list 'v*' --sort=-v:refname | head -n1)"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+          echo "tag=v$next" >> "$GITHUB_OUTPUT"
+          if [[ "v$next" == "$last" ]]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::no release-worthy commits since $last — gate 1 is a no-op"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::releasing $last -> v$next"
+          fi
+
+      - name: Bump package.json to the new version (deterministic, no LLM)
+        if: steps.semver.outputs.release == 'true'
+        env:
+          NEXT: ${{ steps.semver.outputs.next }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            pkg.version = process.env.NEXT;
+            fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+          '
+          echo "::notice::package.json version set to ${NEXT}"
+
+      - name: Curate the changelog (claude -p)
+        if: steps.semver.outputs.release == 'true' && steps.secrets.outputs.anthropic == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TAG: ${{ steps.semver.outputs.tag }}
+        run: |
+          claude -p "$(cat .github/prompts/changelog.md)" \
+            --allowed-tools "Bash(git log *)" "Read(docs/**)" "Edit(docs/**)" \
+            --model claude-haiku-4-5 \
+            --max-turns 6
+
+      - name: Write the release notes (claude -p)
+        if: steps.semver.outputs.release == 'true' && steps.secrets.outputs.anthropic == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TAG: ${{ steps.semver.outputs.tag }}
+        run: |
+          claude -p "$(cat .github/prompts/release-notes.md)" \
+            --allowed-tools "Bash(git log *)" "Read(docs/**)" "Read(package.json)" "Write(docs/release-notes/**)" \
+            --model claude-haiku-4-5 \
+            --max-turns 6
+
+      - name: Commit the bump + changelog + notes, tag, and push (main + tag)
+        if: steps.semver.outputs.release == 'true'
+        env:
+          TAG: ${{ steps.semver.outputs.tag }}
+        run: |
+          git add package.json docs/CHANGELOG.md "docs/release-notes/$TAG.md" 2>/dev/null || git add package.json
+          if git diff --cached --quiet; then
+            echo "::notice::nothing staged for $TAG"
+          else
+            git commit -m "chore: release $TAG (version, changelog, notes)"
+          fi
+          git tag "$TAG"
+          # GITHUB_TOKEN pushes do NOT re-trigger workflows — this main + tag push
+          # is inert; gate 1 will not fire on itself.
+          git push origin "HEAD:$BASE_REF"
+          git push origin "$TAG"
+
+      - name: Publish the GitHub Release
+        if: steps.semver.outputs.release == 'true'
+        env:
+          TAG: ${{ steps.semver.outputs.tag }}
+        run: |
+          notes="docs/release-notes/$TAG.md"
+          if [[ -s "$notes" ]]; then
+            gh release create "$TAG" --title "$TAG" --notes-file "$notes"
+          else
+            # No agent notes (e.g. fork without ANTHROPIC_API_KEY) — let GitHub
+            # build notes from merged PRs (.github/release.yml maps labels).
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
+
+      - name: Announce on Telegram (guarded)
+        if: steps.semver.outputs.release == 'true'
+        env:
+          TAG: ${{ steps.semver.outputs.tag }}
+          HAS_TELEGRAM: ${{ steps.secrets.outputs.telegram }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [[ "$HAS_TELEGRAM" != "true" ]]; then
+            echo "::notice::TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set — skipping announcement"
+            exit 0
+          fi
+          notes="docs/release-notes/$TAG.md"
+          body="$([[ -s "$notes" ]] && cat "$notes" || echo "Released $TAG")"
+          # Telegram caps a message at 4096 chars; keep headroom.
+          body="${body:0:3500}"
+          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${body}" \
+            -o /dev/null -w "telegram: %{http_code}\n"
+
+      - name: Build, start, and screenshot the app (Playwright)
+        if: steps.semver.outputs.release == 'true'
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run build
+          npm start &
+          app_pid=$!
+          for i in $(seq 1 60); do
+            curl -sSf http://localhost:3000 >/dev/null 2>&1 && break
+            sleep 2
+          done
+          node scripts/capture-screenshots.mjs
+          kill "$app_pid" 2>/dev/null || true
+
+      - name: Generate the user guide (claude -p)
+        if: steps.semver.outputs.release == 'true' && steps.secrets.outputs.anthropic == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TAG: ${{ steps.semver.outputs.tag }}
+        run: |
+          # The screenshots already exist on disk (previous step). The agent writes
+          # the words around them — it does not re-shoot or boot the server.
+          claude -p "$(cat .github/prompts/user-guide.md)" \
+            --allowed-tools "Read(lib/**)" "Read(app/**)" "Read(docs/**)" "Write(docs/user-guide/**)" \
+            --model claude-haiku-4-5 \
+            --max-turns 8
+
+      - name: Open the docs/vX.Y.Z PR (gate 2's input)
+        if: steps.semver.outputs.release == 'true'
+        env:
+          TAG: ${{ steps.semver.outputs.tag }}
+        run: |
+          git checkout -b "docs/$TAG"
+          git add docs/user-guide
+          if git diff --cached --quiet; then
+            echo "::notice::no docs/user-guide changes for $TAG — no docs PR opened"
+            exit 0
+          fi
+          git commit -m "docs: user guide for $TAG"
+          git push -u origin "docs/$TAG"
+          # Ensure the gate label exists, then open the PR with it.
+          gh label create gate:docs --color 0e8a16 --description "Merging publishes docs to Redmine (gate 2)" 2>/dev/null || true
+          {
+            echo "User guide for \`$TAG\` (agent-generated, with real screenshots)."
+            echo
+            echo "**Merging this PR fires gate 2** — \`docs-publish.yml\` publishes \`docs/user-guide/*.md\` to the Redmine wiki."
+            echo "Review the pages and the screenshots first; this is the second human gate."
+          } > /tmp/docs-pr-body.md
+          gh pr create \
+            --title "docs: user guide for $TAG" \
+            --body-file /tmp/docs-pr-body.md \
+            --base "$BASE_REF" \
+            --head "docs/$TAG" \
+            --label gate:docs

@@ -1,5 +1,5 @@
-You are writing partner-facing release notes for a version that was just
-tagged. The tag is in the `TAG` environment variable (e.g. `v0.2.0`); the
+You are writing and saving partner-facing release notes for a version that was
+just tagged. The tag is in the `TAG` environment variable (e.g. `v0.2.0`); the
 version is `TAG` without the leading `v`.
 
 Same input as the changelog, different audience. The changelog is the
@@ -16,15 +16,22 @@ release — a short, benefit-first narrative.
    - Lead with what the reader can now do.
    - No internal jargon, no file names, no commit hashes.
    - Each line passes the test of a reader who never saw the code.
+4. **Save the notes to `docs/release-notes/<TAG>.md`** (e.g.
+   `docs/release-notes/v0.2.0.md`) with the Write tool. That file is the
+   artifact — gate 1 reads it back as the GitHub Release body and the Telegram
+   announcement.
 
 ## Constraints
 
-- **Do not commit, push, or edit any file.** These notes seed a draft GitHub
-  Release that a human reviews and publishes.
+- **Write exactly one file: `docs/release-notes/<TAG>.md`.** Do not edit
+  `package.json`, the changelog, or anything else — the workflow bumps the
+  version itself.
+- **Do not commit or push.** Gate 1 commits the file itself (alongside the bump
+  and changelog); you only write it into the working tree.
 - Benefit-first, written for a non-engineer.
 
 ## Final output
 
-Print **only** the release notes as Markdown to stdout — no preamble, no "here
-are the notes", just the notes themselves (a short heading is fine). Your final
-message is captured verbatim as the draft Release body.
+After saving the file, print a one-line confirmation naming the path you wrote
+(e.g. `Wrote docs/release-notes/v0.2.0.md`). The saved file — not your final
+message — is what the release uses.

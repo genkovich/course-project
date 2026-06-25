@@ -8,6 +8,11 @@ on:
 # moved and why). Pure preview: it tags nothing and changes nothing.
 jobs:
   version:
+    # Only the feature PRs — the pipeline's own docs/* and release/* branches are
+    # not what this preview is for.
+    if: >-
+      !startsWith(github.event.pull_request.head.ref, 'docs/') &&
+      !startsWith(github.event.pull_request.head.ref, 'release/')
     runs-on: ubuntu-latest
     permissions:
       contents: read
