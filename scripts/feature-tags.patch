@@ -137,9 +137,17 @@ index 87140f2..e5da212 100644
                </li>
              ))}
 diff --git a/lib/db.ts b/lib/db.ts
-index 74d06a1..d0a3318 100644
+index 74d06a1..c749408 100644
 --- a/lib/db.ts
 +++ b/lib/db.ts
+@@ -1,6 +1,6 @@
+ import path from "node:path";
+ import Database from "better-sqlite3";
+-import { SEED_CAPTIONS, SEED_TEMPLATES } from "./seed";
++import { SEED_CAPTIONS, SEED_MEMES, SEED_TEMPLATES } from "./seed";
+ 
+ export type Template = {
+   id: number;
 @@ -18,6 +18,7 @@ export type Meme = {
    template_id: number;
    top_text: string | null;
@@ -168,10 +176,43 @@ index 74d06a1..d0a3318 100644
  }
  
  function seedIfEmpty(db: Database.Database): void {
-@@ -98,6 +108,41 @@ function seedIfEmpty(db: Database.Database): void {
+@@ -96,6 +106,72 @@ function seedIfEmpty(db: Database.Database): void {
+     });
+     insertMany(SEED_CAPTIONS);
    }
- }
- 
++
++  const memeCount = db
++    .prepare("SELECT COUNT(*) AS c FROM memes")
++    .get() as { c: number };
++
++  if (memeCount.c === 0) {
++    // Resolve each seed meme's template by name — ids are assigned at insert.
++    const templateId = new Map<string, number>();
++    for (const t of db.prepare("SELECT id, name FROM templates").all() as {
++      id: number;
++      name: string;
++    }[]) {
++      templateId.set(t.name, t.id);
++    }
++    const insertMeme = db.prepare(
++      "INSERT INTO memes (template_id, top_text, bottom_text, tags) VALUES (?, ?, ?, ?)"
++    );
++    const insertMany = db.transaction((rows: typeof SEED_MEMES) => {
++      for (const row of rows) {
++        const id = templateId.get(row.templateName);
++        if (!id) continue;
++        insertMeme.run(
++          id,
++          row.topText,
++          row.bottomText,
++          normalizeTags(row.tags).join(",")
++        );
++      }
++    });
++    insertMany(SEED_MEMES);
++  }
++}
++
 +// A tag is lowercase, trimmed, and unique. Empty tags are dropped.
 +function normalizeTags(tags: ReadonlyArray<string> | undefined): string[] {
 +  if (!tags) return [];
@@ -205,12 +246,10 @@ index 74d06a1..d0a3318 100644
 +    template_name: row.template_name,
 +    template_image_path: row.template_image_path,
 +  };
-+}
-+
+ }
+ 
  export function getRandomTemplate(): Template {
-   const row = getDb()
-     .prepare("SELECT * FROM templates ORDER BY RANDOM() LIMIT 1")
-@@ -118,28 +163,36 @@ export function saveMeme(input: {
+@@ -118,28 +194,40 @@ export function saveMeme(input: {
    templateId: number;
    topText: string | null;
    bottomText: string | null;
@@ -258,8 +297,64 @@ index 74d06a1..d0a3318 100644
 +  return rows.map(rowToMeme);
 +}
 +
++// A filter, not a single-row lookup: an empty result is a valid answer (no meme
++// carries this tag), so it returns [] rather than throwing. The house rule about
++// raising a named error applies to lookups like getRandomTemplate that must find
++// exactly one row.
 +export function listMemesByTag(tag: string): MemeWithTemplate[] {
 +  const needle = tag.trim().toLowerCase();
 +  if (!needle) return listMemes();
 +  return listMemes().filter((meme) => meme.tags.includes(needle));
  }
+diff --git a/lib/seed.ts b/lib/seed.ts
+index 8e7854f..bd51385 100644
+--- a/lib/seed.ts
++++ b/lib/seed.ts
+@@ -6,6 +6,47 @@ export const SEED_TEMPLATES: ReadonlyArray<{ name: string; imagePath: string }>
+   { name: "Change My Mind", imagePath: "/templates/change-my-mind.svg" },
+ ];
+ 
++// A handful of pre-tagged memes so the gallery, the tag filter, and the
++// screenshots all have data the moment the app boots — no need to save one by
++// hand first. Each references a template by name; the id is resolved at seed time.
++export const SEED_MEMES: ReadonlyArray<{
++  templateName: string;
++  topText: string;
++  bottomText: string;
++  tags: string[];
++}> = [
++  {
++    templateName: "Drake",
++    topText: "Writing tests",
++    bottomText: "Shipping on Friday",
++    tags: ["dev", "ci"],
++  },
++  {
++    templateName: "This Is Fine",
++    topText: "Prod is down",
++    bottomText: "This is fine",
++    tags: ["dev", "ops"],
++  },
++  {
++    templateName: "Two Buttons",
++    topText: "Refactor",
++    bottomText: "Rewrite from scratch",
++    tags: ["dev"],
++  },
++  {
++    templateName: "Change My Mind",
++    topText: "Tabs beat spaces",
++    bottomText: "Change my mind",
++    tags: ["fun"],
++  },
++  {
++    templateName: "Distracted Boyfriend",
++    topText: "Me",
++    bottomText: "Yet another JS framework",
++    tags: ["dev", "fun"],
++  },
++];
++
+ export const SEED_CAPTIONS: ReadonlyArray<string> = [
+   "When the tests finally pass",
+   "Me explaining my code a week later",
