@@ -3,7 +3,7 @@ name: release
 description: >-
   Run gate 1 of the release pipeline locally, stopping at each human gate. Triggers on
   "run the release", "prepare a release", "/release", "зроби реліз", "підготуй реліз". Drives the
-  five gate-1 stages back to back — bump-version → curate-changelog → release-notes →
+  five gate-1 stages back to back — bump-version → gen-changelog → release-notes →
   generate-user-docs → announce-telegram — pausing after each so the human reviews before the next.
   Prepares everything in the working tree (version, changelog, notes, user guide) and ends by sending
   the announcement only on an explicit yes. Never tags, commits, or pushes; the docs/vX.Y.Z PR and
@@ -28,14 +28,14 @@ This is **gate 1**. It mirrors `.github/workflows/release.yml`: the same five st
 - `package.json`, `docs/CHANGELOG.md`, `docs/release-notes/`, `docs/user-guide/` — the artifacts each stage touches.
 - A running app at `http://localhost:3000` for stage 4's screenshots (start `npm run dev` first).
 - The five stage skills as the source of truth for each stage's protocol:
-  `bump-version`, `curate-changelog`, `release-notes`, `generate-user-docs`, `announce-telegram`.
+  `bump-version`, `gen-changelog`, `release-notes`, `generate-user-docs`, `announce-telegram`.
 
 ## Protocol
 
 Run the five stages **in order**. After each, show the diff (or output) and **pause for the human** before starting the next.
 
 1. **Version.** Follow `bump-version`: run `./scripts/next-version.sh`, explain which part moved and why, edit `version` in `package.json`, propose `git tag v<new>`. → **Gate:** show the package.json diff.
-2. **Changelog.** Follow `curate-changelog`: curate `[Unreleased]` in `docs/CHANGELOG.md` from the log since the last tag. → **Gate:** show `git diff docs/CHANGELOG.md`; fewer lines than the log = curated.
+2. **Changelog.** Follow `gen-changelog`: curate `[Unreleased]` in `docs/CHANGELOG.md` from the log since the last tag. → **Gate:** show `git diff docs/CHANGELOG.md`; fewer lines than the log = curated.
 3. **Release notes.** Follow `release-notes`: save the partner narrative to `docs/release-notes/v<new>.md` (version from `package.json`) and echo it. → **Gate:** show `git diff --stat docs/release-notes/`.
 4. **User guide.** Follow `generate-user-docs`: run `node scripts/capture-screenshots.mjs` against the running app, then write `docs/user-guide/*.md` embedding the shots. → **Gate:** show `ls docs/user-guide` and the new images; the human skims the guide.
 5. **Announce.** Follow `announce-telegram`: show the exact message (the saved notes) and the exact target chat, then send **only on an explicit yes**. → **Gate:** the yes itself; report the message id.
@@ -59,5 +59,5 @@ At the end, summarize the prepared working tree (version, changelog, saved notes
 
 ## References
 
-- `bump-version`, `curate-changelog`, `release-notes`, `generate-user-docs`, `announce-telegram` — the per-stage skills this orchestrator sequences (gate 1).
+- `bump-version`, `gen-changelog`, `release-notes`, `generate-user-docs`, `announce-telegram` — the per-stage skills this orchestrator sequences (gate 1).
 - `publish-redmine` — gate 2, run separately after the docs-PR merges.

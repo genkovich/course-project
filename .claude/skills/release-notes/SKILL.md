@@ -3,7 +3,7 @@ name: release-notes
 description: >-
   Draft and save partner-facing release notes from the same commits as the changelog. Triggers on
   "draft release notes", "release notes for the next version", "/release-notes", "нотатки релізу",
-  "release notes партнеру". Same input as curate-changelog, different audience and tone: a short,
+  "release notes партнеру". Same input as gen-changelog, different audience and tone: a short,
   benefit-first narrative for a user or partner — "what's new for you" — not a categorized engineer's
   list. Keeps only changes a user actually notices; drops internal refactors and tooling. Saves the
   notes to docs/release-notes/vX.Y.Z.md (the version comes from package.json) and echoes them in the
@@ -20,7 +20,7 @@ effort: low
 
 Goal: write **and save** the human announcement of this release — a flowing, benefit-first narrative a non-engineer reads and immediately knows what changed for them — to a versioned file the release CI and a human both reuse.
 
-Same commits as `curate-changelog`, different audience. The changelog is the engineer's categorized history; release notes are the user's story of one release. One input, two outputs — that contrast is the whole point.
+Same commits as `gen-changelog`, different audience. The changelog is the engineer's categorized history; release notes are the user's story of one release. One input, two outputs — that contrast is the whole point.
 
 This skill is the partner half of the **bump + save** pair: `bump-version` decides and applies the number; this skill saves the story of that number. Run after `bump-version`, so `package.json` already holds the version that names the file.
 

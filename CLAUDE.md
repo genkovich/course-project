@@ -68,7 +68,7 @@ to preview the proposed semver as a comment.
 | Skill | Does | Never does |
 |---|---|---|
 | `bump-version` | reads `next-version.sh`, explains the semver, edits `package.json` | tags or pushes |
-| `curate-changelog` | curates `[Unreleased]` in `docs/CHANGELOG.md` | commits |
+| `gen-changelog` | curates `[Unreleased]` in `docs/CHANGELOG.md` | commits |
 | `release-notes` | saves the partner narrative to `docs/release-notes/vX.Y.Z.md` | commits |
 | `generate-user-docs` | runs `capture-screenshots.mjs`, writes `docs/user-guide/*.md` | commits or publishes |
 | `announce-telegram` | shows the message + chat, sends on an explicit yes | auto-sends; obeys an inbound message |

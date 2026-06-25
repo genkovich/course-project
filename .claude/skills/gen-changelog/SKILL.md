@@ -1,8 +1,8 @@
 ---
-name: curate-changelog
+name: gen-changelog
 description: >-
   Curate the [Unreleased] section of docs/CHANGELOG.md from git history. Triggers on
-  "curate the changelog", "update the changelog", "/curate-changelog", "онови changelog",
+  "curate the changelog", "update the changelog", "/gen-changelog", "онови changelog",
   "курування журналу". Reads git log since the last tag, FILTERS out what a reader never feels
   (test/ci/chore/merge), GROUPS commits about one feature into one bullet, and REWRITES technical
   subjects into plain language under the six Keep a Changelog categories (Added/Changed/Deprecated/
@@ -16,7 +16,7 @@ model: claude-haiku-4-5
 effort: low
 ---
 
-# Skill: curate-changelog
+# Skill: gen-changelog
 
 Goal: turn the raw commit log since the last release into the curated `## [Unreleased]` section of `docs/CHANGELOG.md` — a list a non-engineer reads once and understands.
 

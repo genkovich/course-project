@@ -37,7 +37,7 @@ filter) — drives the whole pipeline:
 ```
 feat: filter memes by tag
    ├─ next-version.sh   → MINOR bump → v0.2.0
-   ├─ curate-changelog  → an "Added" line
+   ├─ gen-changelog     → an "Added" line
    ├─ release-notes     → a partner narrative
    └─ generate-user-docs → a user guide page, with before/after screenshots
 ```
@@ -77,7 +77,7 @@ an explicit yes).
 | Skill | Gate | What it does |
 |---|---|---|
 | `/bump-version` | 1 | reads `next-version.sh`, explains **why** MINOR, edits `package.json`, proposes the tag |
-| `/curate-changelog` | 1 | curates `[Unreleased]` in `docs/CHANGELOG.md` (filter · group · rewrite, 6 categories) |
+| `/gen-changelog` | 1 | curates `[Unreleased]` in `docs/CHANGELOG.md` (filter · group · rewrite, 6 categories) |
 | `/release-notes` | 1 | same input, partner narrative — **saves** `docs/release-notes/vX.Y.Z.md` |
 | `/generate-user-docs` | 1 | runs the screenshotter, then **writes** `docs/user-guide/*.md` around the shots |
 | `/announce-telegram` | 1 | shows the exact message + chat, sends to Telegram **only on an explicit yes** |
