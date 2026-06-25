@@ -1,0 +1,265 @@
+diff --git a/app/api/memes/route.ts b/app/api/memes/route.ts
+index ea304a6..df26f50 100644
+--- a/app/api/memes/route.ts
++++ b/app/api/memes/route.ts
+@@ -1,10 +1,11 @@
+ import { NextResponse } from "next/server";
+-import { listMemes, saveMeme } from "@/lib/db";
++import { listMemes, listMemesByTag, saveMeme } from "@/lib/db";
+ 
+ export const dynamic = "force-dynamic";
+ 
+-export async function GET() {
+-  const memes = listMemes();
++export async function GET(request: Request) {
++  const tag = new URL(request.url).searchParams.get("tag");
++  const memes = tag ? listMemesByTag(tag) : listMemes();
+   return NextResponse.json({ memes });
+ }
+ 
+@@ -12,6 +13,7 @@ type SaveBody = {
+   templateId?: unknown;
+   topText?: unknown;
+   bottomText?: unknown;
++  tags?: unknown;
+ };
+ 
+ export async function POST(request: Request) {
+@@ -42,6 +44,10 @@ export async function POST(request: Request) {
+       ? body.bottomText
+       : null;
+ 
+-  const { id } = saveMeme({ templateId, topText, bottomText });
++  const tags = Array.isArray(body.tags)
++    ? body.tags.filter((t): t is string => typeof t === "string")
++    : [];
++
++  const { id } = saveMeme({ templateId, topText, bottomText, tags });
+   return NextResponse.json({ ok: true, id });
+ }
+diff --git a/app/gallery/page.tsx b/app/gallery/page.tsx
+index 87140f2..e5da212 100644
+--- a/app/gallery/page.tsx
++++ b/app/gallery/page.tsx
+@@ -1,10 +1,19 @@
+ import Link from "next/link";
+-import { listMemes } from "@/lib/db";
++import { listMemes, listMemesByTag } from "@/lib/db";
+ 
+ export const dynamic = "force-dynamic";
+ 
+-export default function GalleryPage() {
+-  const memes = listMemes();
++export default async function GalleryPage({
++  searchParams,
++}: {
++  searchParams: Promise<{ tag?: string }>;
++}) {
++  const { tag } = await searchParams;
++  const activeTag = tag?.trim().toLowerCase() || null;
++  const memes = activeTag ? listMemesByTag(activeTag) : listMemes();
++
++  // Every tag in use, for the filter bar.
++  const allTags = [...new Set(listMemes().flatMap((m) => m.tags))].sort();
+ 
+   return (
+     <main className="flex min-h-screen flex-col gap-6 bg-zinc-50 px-4 py-10 dark:bg-zinc-950">
+@@ -20,10 +29,40 @@ export default function GalleryPage() {
+         </Link>
+       </header>
+ 
++      {allTags.length > 0 && (
++        <nav className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-2">
++          <Link
++            href="/gallery"
++            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
++              activeTag === null
++                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
++                : "border border-zinc-300 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
++            }`}
++          >
++            All
++          </Link>
++          {allTags.map((t) => (
++            <Link
++              key={t}
++              href={`/gallery?tag=${encodeURIComponent(t)}`}
++              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
++                activeTag === t
++                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
++                  : "border border-zinc-300 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
++              }`}
++            >
++              #{t}
++            </Link>
++          ))}
++        </nav>
++      )}
++
+       <section className="mx-auto w-full max-w-5xl">
+         {memes.length === 0 ? (
+           <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
+-            No memes saved yet. Generate one and hit Save.
++            {activeTag
++              ? `No memes tagged #${activeTag} yet.`
++              : "No memes saved yet. Generate one and hit Save."}
+           </p>
+         ) : (
+           <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+@@ -50,9 +89,26 @@ export default function GalleryPage() {
+                     </p>
+                   )}
+                 </div>
+-                <div className="flex items-center justify-between px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400">
+-                  <span>#{meme.id} · {meme.template_name}</span>
+-                  <time>{new Date(meme.created_at).toLocaleString()}</time>
++                <div className="flex flex-col gap-1 px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400">
++                  <div className="flex items-center justify-between">
++                    <span>
++                      #{meme.id} · {meme.template_name}
++                    </span>
++                    <time>{new Date(meme.created_at).toLocaleString()}</time>
++                  </div>
++                  {meme.tags.length > 0 && (
++                    <div className="flex flex-wrap gap-1">
++                      {meme.tags.map((t) => (
++                        <Link
++                          key={t}
++                          href={`/gallery?tag=${encodeURIComponent(t)}`}
++                          className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
++                        >
++                          #{t}
++                        </Link>
++                      ))}
++                    </div>
++                  )}
+                 </div>
+               </li>
+             ))}
+diff --git a/lib/db.ts b/lib/db.ts
+index 74d06a1..d0a3318 100644
+--- a/lib/db.ts
++++ b/lib/db.ts
+@@ -18,6 +18,7 @@ export type Meme = {
+   template_id: number;
+   top_text: string | null;
+   bottom_text: string | null;
++  tags: string[];
+   created_at: string;
+ };
+ 
+@@ -64,10 +65,19 @@ function initDb(db: Database.Database): void {
+       template_id INTEGER NOT NULL,
+       top_text    TEXT,
+       bottom_text TEXT,
++      tags        TEXT NOT NULL DEFAULT '',
+       created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+       FOREIGN KEY (template_id) REFERENCES templates(id)
+     );
+   `);
++
++  // Migration: older databases predate the tags column. Add it once.
++  const columns = db.prepare("PRAGMA table_info(memes)").all() as {
++    name: string;
++  }[];
++  if (!columns.some((c) => c.name === "tags")) {
++    db.exec("ALTER TABLE memes ADD COLUMN tags TEXT NOT NULL DEFAULT ''");
++  }
+ }
+ 
+ function seedIfEmpty(db: Database.Database): void {
+@@ -98,6 +108,41 @@ function seedIfEmpty(db: Database.Database): void {
+   }
+ }
+ 
++// A tag is lowercase, trimmed, and unique. Empty tags are dropped.
++function normalizeTags(tags: ReadonlyArray<string> | undefined): string[] {
++  if (!tags) return [];
++  const seen = new Set<string>();
++  for (const raw of tags) {
++    const tag = raw.trim().toLowerCase();
++    if (tag) seen.add(tag);
++  }
++  return [...seen];
++}
++
++type MemeRow = {
++  id: number;
++  template_id: number;
++  top_text: string | null;
++  bottom_text: string | null;
++  tags: string;
++  created_at: string;
++  template_name: string;
++  template_image_path: string;
++};
++
++function rowToMeme(row: MemeRow): MemeWithTemplate {
++  return {
++    id: row.id,
++    template_id: row.template_id,
++    top_text: row.top_text,
++    bottom_text: row.bottom_text,
++    tags: row.tags ? row.tags.split(",").filter(Boolean) : [],
++    created_at: row.created_at,
++    template_name: row.template_name,
++    template_image_path: row.template_image_path,
++  };
++}
++
+ export function getRandomTemplate(): Template {
+   const row = getDb()
+     .prepare("SELECT * FROM templates ORDER BY RANDOM() LIMIT 1")
+@@ -118,28 +163,36 @@ export function saveMeme(input: {
+   templateId: number;
+   topText: string | null;
+   bottomText: string | null;
++  tags?: ReadonlyArray<string>;
+ }): { id: number } {
++  const tags = normalizeTags(input.tags);
+   const result = getDb()
+     .prepare(
+-      "INSERT INTO memes (template_id, top_text, bottom_text) VALUES (?, ?, ?)"
++      "INSERT INTO memes (template_id, top_text, bottom_text, tags) VALUES (?, ?, ?, ?)"
+     )
+-    .run(input.templateId, input.topText, input.bottomText);
++    .run(input.templateId, input.topText, input.bottomText, tags.join(","));
+   return { id: Number(result.lastInsertRowid) };
+ }
+ 
++const LIST_QUERY = `SELECT m.id,
++        m.template_id,
++        m.top_text,
++        m.bottom_text,
++        m.tags,
++        m.created_at,
++        t.name       AS template_name,
++        t.image_path AS template_image_path
++ FROM memes m
++ JOIN templates t ON t.id = m.template_id
++ ORDER BY m.created_at DESC, m.id DESC`;
++
+ export function listMemes(): MemeWithTemplate[] {
+-  return getDb()
+-    .prepare(
+-      `SELECT m.id,
+-              m.template_id,
+-              m.top_text,
+-              m.bottom_text,
+-              m.created_at,
+-              t.name       AS template_name,
+-              t.image_path AS template_image_path
+-       FROM memes m
+-       JOIN templates t ON t.id = m.template_id
+-       ORDER BY m.created_at DESC, m.id DESC`
+-    )
+-    .all() as MemeWithTemplate[];
++  const rows = getDb().prepare(LIST_QUERY).all() as MemeRow[];
++  return rows.map(rowToMeme);
++}
++
++export function listMemesByTag(tag: string): MemeWithTemplate[] {
++  const needle = tag.trim().toLowerCase();
++  if (!needle) return listMemes();
++  return listMemes().filter((meme) => meme.tags.includes(needle));
+ }
