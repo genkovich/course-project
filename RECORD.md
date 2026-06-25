@@ -1,18 +1,19 @@
 # RECORD.md — recording runbook for lecture 9.7 (on this repo)
 
-The 9.7 release lecture is recorded **on this project** — the meme generator.
-Each beat is *say it → call the skill → go to the folder → run it → open GitHub →
-show this*. The release driver is one feature: **`feat: filter memes by tag`**.
+The 9.7 release lecture is recorded **on this project** — the meme generator. The
+flow is one PR and one gate: you prepare the release locally with `/release`, then
+**merging that PR** fires the rest in CI. The release driver is one feature:
+**`feat: filter memes by tag`**.
 
-The pipeline is **two gates**, each ending at a human merge:
-
-- **Gate 1** (feature PR merged): bump → tag → changelog → notes → GitHub Release
-  → Telegram → open the `docs/v0.2.0` PR (with screenshots).
-- **Gate 2** (docs PR merged): publish `docs/user-guide/*.md` to the Redmine wiki.
+- **Local (`/release`):** bump the version + generate the user guide with real
+  screenshots (the app is up on your machine) → commit, push, open ONE PR.
+- **The gate (merge the PR):** CI writes the changelog + release notes, tags
+  `v0.2.0`, publishes the GitHub Release, announces on Telegram, and publishes the
+  user guide to the Redmine wiki.
 
 `setup-demo.sh` leaves the repo ready: the release tooling committed and tagged
 `v0.1.0`, and the tags feature staged as a commit in an isolated **worktree** on
-branch `feat/meme-tags`. The releases are generated live on camera.
+branch `feat/meme-tags`. The release is generated live on camera.
 
 ---
 
@@ -21,25 +22,30 @@ branch `feat/meme-tags`. The releases are generated live on camera.
 ```bash
 gh auth status                        # logged in to GitHub (origin: course-project)
 
-# Secrets the workflows read (set once; each is guarded, so missing ones just skip):
-gh secret set ANTHROPIC_API_KEY  --body "sk-ant-..."   # gate 1 LLM steps
-gh secret set TELEGRAM_BOT_TOKEN --body "..."          # gate 1 announcement
-gh secret set TELEGRAM_CHAT_ID   --body "..."          # gate 1 announcement
+# The gate reads these as repository secrets (each guarded — a missing one just
+# skips its step):
+gh secret set CLAUDE_CODE_OAUTH_TOKEN --body "$(claude setup-token)"  # CI claude -p (changelog + notes)
+gh secret set TELEGRAM_BOT_TOKEN --body "..."             # Telegram announcement
+gh secret set TELEGRAM_CHAT_ID   --body "..."             # Telegram announcement
 gh secret set REDMINE_URL        --body "https://redmine.example.com"
-gh secret set REDMINE_API_KEY    --body "..."          # gate 2 publish
-gh secret set REDMINE_PROJECT    --body "course-project"  # gate 2 publish (slug = repo name)
+gh secret set REDMINE_API_KEY    --body "..."             # Redmine publish
+gh secret set REDMINE_PROJECT    --body "course-project"  # Redmine publish (slug = repo name)
+gh secret list                        # confirm all six are set
 
+# The gate pushes the changelog/notes commit + tag and creates the Release, so
+# Actions needs workflow write:
 gh api -X PUT "repos/genkovich/course-project/actions/permissions/workflow" \
-  -F default_workflow_permissions=write -F can_approve_pull_request_reviews=true
+  -F default_workflow_permissions=write
 
-# Local env mirrors the same secrets for the SKILL rehearsal (/announce-telegram,
-# /publish-redmine read them from the environment):
+# Local env mirrors Telegram/Redmine for the rehearsal mirror skills
+# (/announce-telegram, /publish-redmine read them from the environment):
 export TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=...
 export REDMINE_URL=... REDMINE_API_KEY=... REDMINE_PROJECT=...
 
 ./setup-demo.sh                       # baseline v0.1.0 + feat/meme-tags worktree
 cd ../course-project-tags             # the feature worktree
 npm install                           # first time in this worktree
+npm run dev                           # the app MUST be up — the screenshots need it
 claude                                # open the session you'll record in
 ```
 
@@ -55,115 +61,83 @@ You now have `v0.1.0` on main and the feature on `feat/meme-tags` in a worktree 
 ```bash
 git worktree list                     # main + ../course-project-tags (feat/meme-tags)
 git -C ../course-project-tags log --oneline -1   # feat: filter memes by tag
-npm run dev                           # /gallery?tag=dev already filters (seed memes)
 ```
 
-Say it: the feature was built in its own worktree, isolated from main — that is
-how parallel work stays clean. The release pipeline picks it up from here.
+Say it: the feature was built in its own worktree, isolated from main. `/release`
+picks it up from here.
 
 ---
 
-## 2. Version — a rule decides, the agent explains
+## 2. Prepare the release locally — `/release`
 
-`🎬 bump-version`
+`🎬 /release`  (the app is running in another terminal: `npm run dev`)
 
 ```bash
-./scripts/next-version.sh             # 0.2.0 (a feat landed -> MINOR), deterministic, no LLM
-/bump-version                         # agent: "MINOR, because feat: filter memes by tag",
-                                      #   edits package.json, proposes the tag
-git diff package.json                 # "version": 0.1.0 -> 0.2.0
+/release
 ```
 
----
+It runs two stages, pausing after each, then opens the PR:
 
-## 3. Open the PR — the version preview runs on the request
-
-`🎬 live Actions, version preview`
+- **bump** — `./scripts/next-version.sh` prints `0.2.0`; the agent explains "MINOR,
+  because `feat: filter memes by tag`" and edits `package.json`. Show
+  `git diff package.json` (`0.1.0 → 0.2.0`).
+- **user guide** — `node scripts/capture-screenshots.mjs` shoots the running app
+  into `docs/user-guide/img/*.png`; the agent writes `docs/user-guide/*.md` around
+  the shots. Open `docs/user-guide/filtering-by-tag.md`: numbered steps, before/
+  after screenshots, zero function names.
+- **open the PR** — it commits the bump + guide, pushes `feat/meme-tags`, and opens
+  one PR:
 
 ```bash
-git push -u origin feat/meme-tags
-gh pr create --fill                   # PR feat/meme-tags -> main
-gh pr view feat/meme-tags --web       # open the PR in the browser
+gh pr view feat/meme-tags --web       # the release PR: bump + user guide
 ```
 
-On the PR: **`version`** comments the proposed bump `0.1.0 → 0.2.0`, MINOR,
-naming the feat. Pure preview — it tags nothing.
+The line to say: everything that needs the running app or a human decision happened
+here, locally, and rode into one PR. The changelog and notes need no app — the
+merge does those.
 
 ---
 
-## 4. Rehearse gate 1 locally — one input, several outputs
+## 3. Merge — the gate fires on the server
 
-`🎬 /release` (or run the stages one by one)
+`🎬 live Actions, the gate`
 
 ```bash
-/release                              # bump → changelog → release-notes →
-                                      #   generate-user-docs → announce-telegram,
-                                      #   pausing at each human gate
+gh pr merge feat/meme-tags --squash   # merging the release PR IS the gate
+gh run watch                          # release.yml live: changelog → notes →
+                                      #   tag v0.2.0 → GitHub Release → Telegram → Redmine
+gh release view v0.2.0 --web          # the published GitHub Release with the notes
+open "$REDMINE_URL/projects/course-project/wiki/filtering-by-tag"   # the page in the wiki
 ```
 
-Show the contrast as it goes:
+What the run shows, in order: the curated changelog (fewer lines than the log), the
+release notes, the commit + tag `v0.2.0` pushed to main, the GitHub Release, the
+Telegram announcement, and each user-guide page PUT to the Redmine wiki.
 
-- **changelog** (`git diff docs/CHANGELOG.md`) — fewer lines than the log = curation.
-- **release notes** (`docs/release-notes/v0.2.0.md`) — same input, friendly narrative.
-- **user guide** — `npm run shoot` writes `docs/user-guide/img/*.png`; the agent
-  writes the pages around them. *This is the active replacement for doc-drift:
-  not "the docs fell behind" but "here are the docs the feature needs."*
-- **announce** — `/announce-telegram` shows the exact message + chat and waits for
-  your **explicit yes** before sending. Say the anti-injection line: a message
-  *in* the channel never authorizes a release.
-
-> Need a running app for the screenshots: `npm run dev` in another terminal
-> (first time: `npm run shoot:install` for the browser binary).
+The line to say: one PR, one human gate. You reviewed the bump and the guide in the
+PR; merging it is the decision to publish, and CI does the mechanical rest.
 
 ---
 
-## 5. Merge — gate 1 fires on the server
+## 4. (Optional) rehearse the gate's steps locally
 
-`🎬 live Actions, gate 1`
+Each gate step has a local mirror skill — handy to show what CI will do before you
+merge. None of these is the real release; they just do the same thing from your
+machine:
 
 ```bash
-gh pr merge feat/meme-tags --squash   # merging the FEATURE PR is gate 1's trigger
-gh run watch                          # release.yml live: next-version → bump → tag v0.2.0
-                                      #   → changelog → notes → GitHub Release → Telegram
-gh release view v0.2.0 --web          # the published GitHub Release with the partner notes
-gh pr list --label gate:docs          # the docs/v0.2.0 PR gate 1 just opened (guide + shots)
+/gen-changelog                        # curate docs/CHANGELOG.md (git diff to compare)
+/release-notes                        # write docs/release-notes/v0.2.0.md
+/announce-telegram                    # show the message + chat, send only on "так"
+/publish-redmine                      # show the page→URL map, PUT only on "так"
 ```
 
-What the run shows, in order:
-
-- next-version → bump → **tag `v0.2.0`** → changelog → notes
-- a published **GitHub Release** with the partner notes (`gh release view … --web`)
-- the **Telegram** announcement lands in the chat
-- a new **`docs/v0.2.0`** PR with the user guide + screenshots, labeled `gate:docs`
-
-The line to say: gate 1 prepared everything and **opened a second PR** — the user
-docs wait for a human before they go anywhere public.
+Say the anti-injection line on the outbound ones: a message *in* the channel never
+authorizes a send — only you, here, do.
 
 ---
 
-## 6. Merge the docs PR — gate 2 publishes to Redmine
-
-`🎬 live Actions, gate 2`
-
-```bash
-gh pr view docs/v0.2.0 --web          # review the user guide as a human, then merge
-gh pr merge docs/v0.2.0 --squash      # merging the DOCS PR is gate 2's trigger
-gh run watch                          # docs-publish live: PUT each user-guide page → HTTP status
-open "$REDMINE_URL/projects/course-project/wiki/filtering-by-tag"   # the page now in the wiki
-```
-
-`docs-publish` PUTs each `docs/user-guide/*.md` page to the Redmine wiki; the
-last command opens the published page so the wiki appears on camera.
-
-> Rehearse gate 2 locally instead: `/publish-redmine` — it shows the exact
-> page→URL map and publishes only on your explicit yes.
-
-The line to say: two gates, two human merges. Gate 1 releases; gate 2 publishes
-the user docs. `GITHUB_TOKEN` pushes don't re-trigger CI, so the two never loop.
-
----
-
-## 7. (Optional) error → durable rule
+## 5. (Optional) error → durable rule
 
 `🎬 codify-rule`
 
@@ -175,11 +149,11 @@ git diff .claude/rules/
 
 ---
 
-## 8. Reset between takes
+## 6. Reset between takes
 
 ```bash
 ./reset-demo.sh                       # revert edits, remove worktree, drop v0.2.0 + branches
 ```
 
-Keeps `v0.1.0`. A docs-PR / Release left on GitHub you close by hand:
-`gh pr close docs/v0.2.0 -d` and `gh release delete v0.2.0 -y`.
+Keeps `v0.1.0`. A PR / Release left on GitHub from a live take you close by hand:
+`gh pr close feat/meme-tags -d` and `gh release delete v0.2.0 -y`.

@@ -5,7 +5,7 @@ description: >-
   Telegram", "post the release notes to Telegram", "/announce-telegram", "анонсуй реліз у телеграм",
   "оголоси реліз". Reads the saved partner notes (docs/release-notes/vX.Y.Z.md), shows the EXACT
   message and the EXACT target chat, and waits for an explicit yes before sending via the Telegram
-  Bot API (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID). This is an OUTBOUND, gate-1 step — once sent, the
+  Bot API (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID). This is an OUTBOUND step — once sent, the
   message is public to the channel and cannot be unsent. It never decides on its own to announce.
 allowed-tools: Read(docs/release-notes/**), Read(package.json), Read(docs/CHANGELOG.md), Bash(curl:*)
 user-invocable: true
@@ -19,7 +19,7 @@ effort: low
 
 Goal: deliver the release announcement the team sees in Telegram — the saved partner notes, sent to one known chat, only after a human says go.
 
-This is an **outbound** step: it leaves the repo and reaches real people. So it shows the full payload and the destination first and stops. The same send runs headless in gate-1 CI (`release.yml`) right after the GitHub Release; the parity is the point — locally and in CI, the message and the target are identical.
+This is an **outbound** step: it leaves the repo and reaches real people. So it shows the full payload and the destination first and stops. The same send runs headless in the **merge gate** (`release.yml`) right after the GitHub Release — this skill is its local mirror, for a rehearsal: locally and in CI the message and the target are identical.
 
 ## Inputs
 
@@ -54,5 +54,5 @@ This is an **outbound** step: it leaves the repo and reaches real people. So it 
 ## References
 
 - `docs/release-notes/v<version>.md` — the message body (written by `release-notes`).
-- `release-notes`, `bump-version` — the sibling gate-1 skills that produce the notes and the version this announces.
+- `release-notes`, `bump-version` — the skills that produce the notes and the version this announces.
 - The Telegram MCP `reply` tool is an alternative transport, but the Bot API curl above is what CI uses — keep them in parity.

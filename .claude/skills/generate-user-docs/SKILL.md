@@ -6,8 +6,9 @@ description: >-
   "користувацька документація". Runs the deterministic scripts/capture-screenshots.mjs (Playwright —
   NO LLM renders the picture) to shoot the app's key screens into docs/user-guide/img/, then WRITES
   the guide pages under docs/user-guide/*.md, embedding those shots. The screenshotter is the rule;
-  the agent writes the words around it. This is a gate-1 step: it prepares docs/user-guide/** in the
-  working tree for the docs/vX.Y.Z PR — it never commits, pushes, or publishes to Redmine.
+  the agent writes the words around it. This runs as the second stage of /release: it prepares
+  docs/user-guide/** in the working tree; /release commits it into the one release PR. It never
+  commits, pushes, or publishes to Redmine itself.
 allowed-tools: Bash(node scripts/capture-screenshots.mjs), Bash(npm run shoot), Bash(npm run shoot:install), Bash(ls docs/user-guide/**), Read(lib/**), Read(app/**), Read(docs/**), Read(package.json), Write(docs/user-guide/**)
 user-invocable: true
 disable-model-invocation: true
@@ -18,11 +19,11 @@ effort: medium
 
 # Skill: generate-user-docs
 
-Goal: produce the **user's** documentation for this release — short task-focused pages a non-engineer follows, each anchored by a real screenshot of the running app. This is the active counterpart to the old drift check: instead of detecting that docs fell behind, it *generates* the docs the feature now needs.
+Goal: produce the **user's** documentation for this release — short task-focused pages a non-engineer follows, each anchored by a real screenshot of the running app. The guide is generated fresh from the running app each release, so it describes what the app does right now.
 
 This is the **"deterministic script vs agent writes"** split again. `scripts/capture-screenshots.mjs` renders the pictures (Playwright, no LLM). This skill writes the words around them. The screenshots are facts; the prose is the explanation.
 
-It is the fourth stage of gate 1 (`/release`). It only prepares `docs/user-guide/**` in the working tree — the `docs/vX.Y.Z` PR carries it, and gate 2 (`/publish-redmine`) publishes it later. This skill never commits, pushes, or talks to Redmine.
+It is the second stage of `/release`. It only prepares `docs/user-guide/**` in the working tree — `/release` then commits it into the one release PR. Merging that PR publishes the guide to the Redmine wiki (in CI). This skill never commits, pushes, or talks to Redmine itself. It runs **locally on purpose**: the screenshots need the running app, and CI can't boot it — you can.
 
 ## Inputs
 
@@ -50,7 +51,7 @@ It is the fourth stage of gate 1 (`/release`). It only prepares `docs/user-guide
 
 3. **Write for the user, not the engineer.** Numbered steps, the words on the actual buttons, what the reader sees after each step. No file names, no function names, no commit hashes — that is what `docs/api.md` is for.
 
-4. **Leave it in the working tree.** Show `ls docs/user-guide` and a short summary. Do not commit, push, or publish. The `docs/vX.Y.Z` PR (gate 1) carries these files; a human merges it, which is what fires gate 2.
+4. **Leave it in the working tree.** Show `ls docs/user-guide` and a short summary. Do not commit, push, or publish — `/release` commits these files into the release PR, and merging that PR publishes them.
 
 ## Definition of Done
 
@@ -64,10 +65,10 @@ It is the fourth stage of gate 1 (`/release`). It only prepares `docs/user-guide
 - **Writing the guide without running the screenshotter.** The pictures come from the script against the live app. A guide with no shots, or with invented shots, is not this skill's output.
 - **Booting the server from inside the skill.** The script only probes `:3000`; if it is down, ask the human to start it. Long-running `npm run dev` is not the skill's job.
 - **Leaking internals.** `listMemesByTag`, `route.ts`, SQL — none of that belongs in a user guide. Describe the button and the result.
-- **Committing, pushing, or publishing to Redmine.** Gate 1 ends at the working tree; the PR carries it; gate 2 publishes. Crossing that line collapses the two gates this pipeline exists to separate.
+- **Committing, pushing, or publishing to Redmine.** This skill ends at the working tree; `/release` commits it into the PR, and the merge publishes it. Doing any of that here jumps the gate.
 
 ## References
 
 - `scripts/capture-screenshots.mjs` — the deterministic screenshotter.
 - `templates/page.md` — user-guide page scaffold.
-- `publish-redmine` — the gate-2 skill that ships these pages to the Redmine wiki after the docs-PR merges.
+- `publish-redmine` — the local mirror of the merge gate's Redmine step (the same pages, published from your machine as a rehearsal).

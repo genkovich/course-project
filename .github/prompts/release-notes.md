@@ -18,8 +18,8 @@ release — a short, benefit-first narrative.
    - Each line passes the test of a reader who never saw the code.
 4. **Save the notes to `docs/release-notes/<TAG>.md`** (e.g.
    `docs/release-notes/v0.2.0.md`) with the Write tool. That file is the
-   artifact — gate 1 reads it back as the GitHub Release body and the Telegram
-   announcement.
+   artifact — the merge gate reads it back as the GitHub Release body and the
+   Telegram announcement.
 
 ## Constraints
 

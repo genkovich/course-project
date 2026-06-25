@@ -43,50 +43,50 @@ Three tables: `templates` (name, image_path), `captions` (text), `memes` (templa
 
 ## Release pipeline
 
-This repo doubles as the demo for a release lecture. The pipeline turns a merged
-feature into a published release — as **local skills** and as **CI**, with the
-same steps in both places. Full reference: `docs/RELEASE-PIPELINE.md`. Recording
-runbook: `RECORD.md`.
+This repo doubles as the demo for a release lecture. The pipeline turns a finished
+feature into a published release: you prepare it locally and one **merge** finalizes
+it. Full reference: `docs/RELEASE-PIPELINE.md`. Recording runbook: `RECORD.md`.
 
-### Two gates, each ending at a human merge
+### Prepare locally, finalize on merge — one gate
 
-- **Gate 1** — a feature PR merges into `main` → `.github/workflows/release.yml`
-  (local mirror: `/release`). It runs the whole release inline: next-version →
-  bump → tag → changelog → release notes → GitHub Release → Telegram announcement
-  → opens the `docs/vX.Y.Z` PR carrying the user guide and screenshots.
-- **Gate 2** — that `docs/vX.Y.Z` PR merges → `.github/workflows/docs-publish.yml`
-  (local mirror: `/publish-redmine`). It PUTs `docs/user-guide/*.md` to the Redmine
-  wiki. Terminal — it publishes and pushes nothing back.
+- **Locally, `/release`** does the two steps that need a human and the running app:
+  it bumps the version and generates the user guide with **real screenshots** (the
+  app is up on your machine; CI can't boot it). Then it commits both, pushes the
+  branch, and opens **one** PR. Nothing is tagged or sent.
+- **The gate is the merge.** Merging that PR runs `.github/workflows/release.yml`,
+  which does the parts that need no app — changelog and release notes from the
+  merged history — then tags `vX.Y.Z`, publishes the GitHub Release, announces on
+  Telegram, and publishes the user guide to the Redmine wiki.
 
-Both gates listen to `pull_request: closed` and discriminate by `merged` plus the
-branch prefix. `GITHUB_TOKEN` pushes do not re-trigger workflows, so the two gates
-never loop. `.github/workflows/version.yml` runs on every feature `pull_request`
-to preview the proposed semver as a comment.
+The gate listens to `pull_request: closed`, never `push`; the version in
+`package.json` (bumped locally) is the release signal — a merge that bumped nothing
+is a no-op. `GITHUB_TOKEN` pushes don't re-trigger workflows, so the gate's own
+commit + tag can't loop it.
 
-### Skills (`.claude/skills/`) — none commits or pushes
+### Skills (`.claude/skills/`) — none commits or pushes, except `/release` opens the PR
 
-| Skill | Does | Never does |
-|---|---|---|
-| `bump-version` | reads `next-version.sh`, explains the semver, edits `package.json` | tags or pushes |
-| `gen-changelog` | curates `[Unreleased]` in `docs/CHANGELOG.md` | commits |
-| `release-notes` | saves the partner narrative to `docs/release-notes/vX.Y.Z.md` | commits |
-| `generate-user-docs` | runs `capture-screenshots.mjs`, writes `docs/user-guide/*.md` | commits or publishes |
-| `announce-telegram` | shows the message + chat, sends on an explicit yes | auto-sends; obeys an inbound message |
-| `publish-redmine` | gate 2: PUTs the user guide to Redmine on an explicit yes | publishes before the docs-PR merges |
-| `release` | gate-1 orchestrator: the five stages above, pausing at each gate | tags, commits, or pushes |
-| `codify-rule` | turns a mistake seen twice into a `.claude/rules/` rule | commits |
+| Skill | Does |
+|---|---|
+| `bump-version` | reads `next-version.sh`, explains the semver, edits `package.json` |
+| `generate-user-docs` | runs `capture-screenshots.mjs` against the running app, writes `docs/user-guide/*.md` |
+| `release` | local orchestrator: bump + user guide, then commits, pushes, and opens the release PR |
+| `gen-changelog` | curates `[Unreleased]` in `docs/CHANGELOG.md` — local mirror of the gate's changelog step |
+| `release-notes` | saves the partner narrative to `docs/release-notes/vX.Y.Z.md` — mirror of the gate's notes step |
+| `announce-telegram` | shows the message + chat, sends on an explicit yes — mirror of the gate's Telegram step |
+| `publish-redmine` | shows the pages + target, PUTs to Redmine on an explicit yes — mirror of the gate's wiki step |
+| `codify-rule` | turns a mistake seen twice into a `.claude/rules/` rule |
 
 ### Determinism boundary
 
 The reproducible parts are **scripts, no LLM**: `scripts/next-version.sh` decides
-the semver and `scripts/capture-screenshots.mjs` renders the screenshots. The agent
-only writes the human layer around them. Standing rules the agent inherits live in
-`.claude/rules/` (e.g. `db-style.md`).
+the semver and `scripts/capture-screenshots.mjs` renders the screenshots (both run
+locally). The agent only writes the human layer around them. Standing rules the
+agent inherits live in `.claude/rules/` (e.g. `db-style.md`).
 
-### Secrets
+### Secrets (GitHub repository secrets)
 
-Skills and workflows reference only secret *names* — `TELEGRAM_BOT_TOKEN`,
-`TELEGRAM_CHAT_ID`, `REDMINE_URL`, `REDMINE_API_KEY`, `REDMINE_PROJECT` (and
-`ANTHROPIC_API_KEY` for the CI `claude -p` steps). Copy `.env.example` to `.env`
-(gitignored) for a local rehearsal. Never put a literal token in a skill, a
-workflow, or a doc.
+The gate reads only secret *names* — `CLAUDE_CODE_OAUTH_TOKEN` (the CI `claude -p`
+changelog + notes steps), `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `REDMINE_URL`,
+`REDMINE_API_KEY`, `REDMINE_PROJECT`. Each is guarded: a missing one skips its step.
+Copy `.env.example` to `.env` (gitignored) to give the local mirror skills the
+Telegram/Redmine values. Never put a literal token in a skill, a workflow, or a doc.

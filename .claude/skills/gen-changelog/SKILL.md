@@ -20,7 +20,7 @@ effort: low
 
 Goal: turn the raw commit log since the last release into the curated `## [Unreleased]` section of `docs/CHANGELOG.md` — a list a non-engineer reads once and understands.
 
-This is the manual half of the changelog step. The same curation discipline runs headless inside gate 1 (`.github/workflows/release.yml`) when a feature PR merges; the logic is identical, only where it runs changes.
+This is the manual/rehearsal half of the changelog step. The same curation runs headless inside the **merge gate** (`.github/workflows/release.yml`) when the release PR merges; the logic is identical, only where it runs changes.
 
 ## Inputs
 

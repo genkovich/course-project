@@ -9,12 +9,12 @@
 # patch scripts/feature-tags.patch. Keeping the feature in a patch (not in the
 # working tree) is what lets the demo survive a fresh `git clone`.
 #
-# After this you record the two-gate pipeline:
+# After this you record the one-gate pipeline:
 #
-#   worktree (feat/meme-tags) -> open PR (version workflow comments 0.2.0)
-#   -> merge -> GATE 1 (release.yml): bump + tag + changelog + notes + GitHub
-#      Release + Telegram + open the docs/v0.2.0 PR (with screenshots)
-#   -> merge the docs PR -> GATE 2 (docs-publish.yml): publish to Redmine.
+#   worktree (feat/meme-tags) -> /release: bump + user guide (real screenshots),
+#      then push + open ONE PR
+#   -> merge that PR -> THE GATE (release.yml): changelog + notes + tag + GitHub
+#      Release + Telegram + Redmine wiki.
 #
 # Usage:  ./setup-demo.sh [worktree-path]
 #   worktree-path  default: ../course-project-tags
@@ -64,9 +64,9 @@ Ready. Baseline v0.1.0 is on main; the feature lives in an isolated worktree:
     ./scripts/next-version.sh        # 0.2.0 (a feat landed -> MINOR)
     npm run dev            # seeds data.db; /gallery?tag=dev already filters
 
-Record from there: open a PR (the version workflow comments 0.2.0), then merge —
-GATE 1 cuts the release and opens the docs/v0.2.0 PR. Merge that PR to fire
-GATE 2 (Redmine publish). To rehearse locally instead: /release (gate 1) and
-/publish-redmine (gate 2). See RECORD.md for the full beat-by-beat runbook.
+Record from there: with the app running (npm run dev), call /release — it bumps the
+version, generates the user guide with real screenshots, and opens ONE PR. Merge
+that PR to fire THE GATE (release.yml): changelog + notes + tag + GitHub Release +
+Telegram + Redmine. See RECORD.md for the full beat-by-beat runbook.
 Reset with ./reset-demo.sh.
 EOF

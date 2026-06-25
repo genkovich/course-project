@@ -4,9 +4,9 @@
 # one of the categories below. `*` is the catch-all.
 #
 # This is the deterministic skeleton: the platform groups merged PRs into a dry
-# list (and gate 1 falls back to it when no agent notes exist). The agentic step
-# (release.yml, gate 1) humanizes that list into a curated changelog + saved
-# partner notes + the published GitHub Release.
+# list (and the merge gate falls back to it when no agent notes exist). The
+# agentic step (release.yml) humanizes that list into a curated changelog +
+# saved partner notes + the published GitHub Release.
 changelog:
   exclude:
     labels:

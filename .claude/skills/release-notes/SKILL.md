@@ -52,7 +52,7 @@ This skill is the partner half of the **bump + save** pair: `bump-version` decid
 - **Restating the changelog.** If the output is a bulleted Added/Fixed list, you wrote a changelog, not release notes. Use prose, lead with the benefit.
 - **Leaking internals.** A user does not care about `refactor:` or a file path. If it is not a user-visible change, it is not in the notes.
 - **Naming the file from a guess.** The version comes from `package.json` (set by `bump-version`), not from your own count. Wrong version → the file is misfiled.
-- **Committing or pushing the file.** Save it to the working tree and stop; the human commits it (or gate 1 commits it in CI). The skill writes one file under `docs/release-notes/` — nothing else.
+- **Committing or pushing the file.** Save it to the working tree and stop; the human commits it (or the merge gate commits it in CI). The skill writes one file under `docs/release-notes/` — nothing else.
 
 ## References
 

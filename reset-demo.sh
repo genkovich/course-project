@@ -2,11 +2,10 @@
 #
 # reset-demo.sh — put the demo back so it can be re-recorded.
 #
-# Reverts the working-tree edits the pipeline makes (version, changelog, notes,
-# the generated user guide, codified rules), removes the feature worktree +
-# branch, and drops the throwaway docs/* branches and v0.2.0+ tags — keeping the
-# v0.1.0 baseline. Local only; a docs-PR / Release left on GitHub from a live
-# take you close by hand.
+# Reverts the working-tree edits /release makes (version, the generated user
+# guide, codified rules), removes the feature worktree + branch, and drops any
+# stray pipeline branches and v0.2.0+ tags — keeping the v0.1.0 baseline. Local
+# only; a PR / Release left on GitHub from a live take you close by hand.
 #
 # Usage:  ./reset-demo.sh [worktree-path]
 #
@@ -42,4 +41,4 @@ while IFS= read -r t; do
 done < <(git tag | grep -vx 'v0.1.0' || true)
 
 echo "Reset: on main, only v0.1.0 remains, feature worktree removed."
-echo "Re-run ./setup-demo.sh to record again. (Remote docs-PR/Release from a live take: close by hand.)"
+echo "Re-run ./setup-demo.sh to record again. (Remote PR/Release from a live take: close by hand.)"

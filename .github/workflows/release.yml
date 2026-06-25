@@ -3,28 +3,29 @@ on:
   pull_request:
     types: [closed]
 
-# GATE 1 — a feature PR merged into main. NOT a tag push and NOT push:main, so it
-# can never re-trigger itself: GITHUB_TOKEN pushes (the tag and main commit below)
-# do not fire workflows by GitHub policy, and opening the docs PR is `opened`, not
-# `closed`. The job runs the whole release inline: next-version → bump → tag →
-# changelog → notes → GitHub Release → Telegram → open the docs/vX.Y.Z PR. The
-# Redmine publish is a SEPARATE node (gate 2, docs-publish.yml) on the docs-PR merge.
+# THE GATE — merging the release PR fires the whole release. The PR already
+# carries the version bump and the user guide with real screenshots, both made
+# locally by /release (the screenshots need the running app, which CI can't
+# boot — you can). On merge, CI does the parts that need no app: changelog →
+# release notes → tag → GitHub Release → Telegram → Redmine wiki.
+#
+# It listens to pull_request: closed (merged), never push — so the changelog/
+# notes commit and the tag it pushes below (under GITHUB_TOKEN) do NOT re-fire
+# it (GitHub policy). It opens nothing, so it cannot loop. A merged PR that did
+# not bump the version is a no-op: the version in package.json IS the release
+# signal.
 concurrency:
   group: release-main
   cancel-in-progress: false
 
 jobs:
-  gate1:
-    # Merged, and the source branch is a real feature — not a docs/* branch (that
-    # is gate 2's input) and not a release/* branch (housekeeping).
+  release:
     if: >-
       github.event.pull_request.merged == true &&
-      !startsWith(github.event.pull_request.head.ref, 'docs/') &&
       !startsWith(github.event.pull_request.head.ref, 'release/')
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
     env:
       GH_TOKEN: ${{ github.token }}
       BASE_REF: ${{ github.event.pull_request.base.ref }}
@@ -52,46 +53,37 @@ jobs:
       - name: Detect available secrets (guards for the outbound steps)
         id: secrets
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          REDMINE_URL: ${{ secrets.REDMINE_URL }}
+          REDMINE_API_KEY: ${{ secrets.REDMINE_API_KEY }}
+          REDMINE_PROJECT: ${{ secrets.REDMINE_PROJECT }}
         run: |
-          echo "anthropic=$([[ -n "$ANTHROPIC_API_KEY" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "claude=$([[ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "telegram=$([[ -n "$TELEGRAM_BOT_TOKEN" && -n "$TELEGRAM_CHAT_ID" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "redmine=$([[ -n "$REDMINE_URL" && -n "$REDMINE_API_KEY" && -n "$REDMINE_PROJECT" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
-      - name: Compute next version (deterministic, no LLM)
-        id: semver
+      - name: Read the version from package.json (set locally by /release)
+        id: ver
         run: |
-          next="$(./scripts/next-version.sh)"
+          version="$(node -p "require('./package.json').version")"
           last="$(git tag --list 'v*' --sort=-v:refname | head -n1)"
-          echo "next=$next" >> "$GITHUB_OUTPUT"
-          echo "tag=v$next" >> "$GITHUB_OUTPUT"
-          if [[ "v$next" == "$last" ]]; then
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          if [[ "v$version" == "$last" ]]; then
             echo "release=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::no release-worthy commits since $last — gate 1 is a no-op"
+            echo "::notice::package.json is still v$version (already tagged) — this merge bumped nothing, so the gate is a no-op"
           else
             echo "release=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::releasing $last -> v$next"
+            echo "::notice::releasing $last -> v$version"
           fi
 
-      - name: Bump package.json to the new version (deterministic, no LLM)
-        if: steps.semver.outputs.release == 'true'
-        env:
-          NEXT: ${{ steps.semver.outputs.next }}
-        run: |
-          node -e '
-            const fs = require("fs");
-            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
-            pkg.version = process.env.NEXT;
-            fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
-          '
-          echo "::notice::package.json version set to ${NEXT}"
-
       - name: Curate the changelog (claude -p)
-        if: steps.semver.outputs.release == 'true' && steps.secrets.outputs.anthropic == 'true'
+        if: steps.ver.outputs.release == 'true' && steps.secrets.outputs.claude == 'true'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          TAG: ${{ steps.semver.outputs.tag }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
         run: |
           claude -p "$(cat .github/prompts/changelog.md)" \
             --allowed-tools "Bash(git log *)" "Read(docs/**)" "Edit(docs/**)" \
@@ -99,59 +91,54 @@ jobs:
             --max-turns 6
 
       - name: Write the release notes (claude -p)
-        if: steps.semver.outputs.release == 'true' && steps.secrets.outputs.anthropic == 'true'
+        if: steps.ver.outputs.release == 'true' && steps.secrets.outputs.claude == 'true'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          TAG: ${{ steps.semver.outputs.tag }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
         run: |
           claude -p "$(cat .github/prompts/release-notes.md)" \
             --allowed-tools "Bash(git log *)" "Read(docs/**)" "Read(package.json)" "Write(docs/release-notes/**)" \
             --model claude-haiku-4-5 \
             --max-turns 6
 
-      - name: Commit the bump + changelog + notes, tag, and push (main + tag)
-        if: steps.semver.outputs.release == 'true'
+      - name: Commit changelog + notes, tag, and push (main + tag)
+        if: steps.ver.outputs.release == 'true'
         env:
-          TAG: ${{ steps.semver.outputs.tag }}
+          TAG: ${{ steps.ver.outputs.tag }}
         run: |
-          git add package.json docs/CHANGELOG.md "docs/release-notes/$TAG.md" 2>/dev/null || git add package.json
+          git add docs/CHANGELOG.md "docs/release-notes/$TAG.md" 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "::notice::nothing staged for $TAG"
           else
-            git commit -m "chore: release $TAG (version, changelog, notes)"
+            git commit -m "chore: release $TAG (changelog, notes)"
           fi
           git tag "$TAG"
           # GITHUB_TOKEN pushes do NOT re-trigger workflows — this main + tag push
-          # is inert; gate 1 will not fire on itself.
+          # is inert; the gate will not fire on itself.
           git push origin "HEAD:$BASE_REF"
           git push origin "$TAG"
 
       - name: Publish the GitHub Release
-        if: steps.semver.outputs.release == 'true'
+        if: steps.ver.outputs.release == 'true'
         env:
-          TAG: ${{ steps.semver.outputs.tag }}
+          TAG: ${{ steps.ver.outputs.tag }}
         run: |
           notes="docs/release-notes/$TAG.md"
           if [[ -s "$notes" ]]; then
             gh release create "$TAG" --title "$TAG" --notes-file "$notes"
           else
-            # No agent notes (e.g. fork without ANTHROPIC_API_KEY) — let GitHub
+            # No agent notes (e.g. CLAUDE_CODE_OAUTH_TOKEN missing) — let GitHub
             # build notes from merged PRs (.github/release.yml maps labels).
             gh release create "$TAG" --title "$TAG" --generate-notes
           fi
 
       - name: Announce on Telegram (guarded)
-        if: steps.semver.outputs.release == 'true'
+        if: steps.ver.outputs.release == 'true' && steps.secrets.outputs.telegram == 'true'
         env:
-          TAG: ${{ steps.semver.outputs.tag }}
-          HAS_TELEGRAM: ${{ steps.secrets.outputs.telegram }}
+          TAG: ${{ steps.ver.outputs.tag }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          if [[ "$HAS_TELEGRAM" != "true" ]]; then
-            echo "::notice::TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set — skipping announcement"
-            exit 0
-          fi
           notes="docs/release-notes/$TAG.md"
           body="$([[ -s "$notes" ]] && cat "$notes" || echo "Released $TAG")"
           # Telegram caps a message at 4096 chars; keep headroom.
@@ -161,58 +148,29 @@ jobs:
             --data-urlencode "text=${body}" \
             -o /dev/null -w "telegram: %{http_code}\n"
 
-      - name: Build, start, and screenshot the app (Playwright)
-        if: steps.semver.outputs.release == 'true'
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
-          npm run build
-          npm start &
-          app_pid=$!
-          for i in $(seq 1 60); do
-            curl -sSf http://localhost:3000 >/dev/null 2>&1 && break
-            sleep 2
-          done
-          node scripts/capture-screenshots.mjs
-          kill "$app_pid" 2>/dev/null || true
-
-      - name: Generate the user guide (claude -p)
-        if: steps.semver.outputs.release == 'true' && steps.secrets.outputs.anthropic == 'true'
+      - name: Publish the user guide to the Redmine wiki (guarded)
+        if: steps.ver.outputs.release == 'true' && steps.secrets.outputs.redmine == 'true'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          TAG: ${{ steps.semver.outputs.tag }}
+          REDMINE_URL: ${{ secrets.REDMINE_URL }}
+          REDMINE_API_KEY: ${{ secrets.REDMINE_API_KEY }}
+          REDMINE_PROJECT: ${{ secrets.REDMINE_PROJECT }}
         run: |
-          # The screenshots already exist on disk (previous step). The agent writes
-          # the words around them — it does not re-shoot or boot the server.
-          claude -p "$(cat .github/prompts/user-guide.md)" \
-            --allowed-tools "Read(lib/**)" "Read(app/**)" "Read(docs/**)" "Write(docs/user-guide/**)" \
-            --model claude-haiku-4-5 \
-            --max-turns 8
-
-      - name: Open the docs/vX.Y.Z PR (gate 2's input)
-        if: steps.semver.outputs.release == 'true'
-        env:
-          TAG: ${{ steps.semver.outputs.tag }}
-        run: |
-          git checkout -b "docs/$TAG"
-          git add docs/user-guide
-          if git diff --cached --quiet; then
-            echo "::notice::no docs/user-guide changes for $TAG — no docs PR opened"
+          # The user guide is already in the repo — it rode in on the merged PR,
+          # reviewed there. The merge IS its gate, so we publish it now. No re-shoot.
+          shopt -s nullglob
+          pages=(docs/user-guide/*.md)
+          if [[ ${#pages[@]} -eq 0 ]]; then
+            echo "::notice::no docs/user-guide/*.md to publish"
             exit 0
           fi
-          git commit -m "docs: user guide for $TAG"
-          git push -u origin "docs/$TAG"
-          # Ensure the gate label exists, then open the PR with it.
-          gh label create gate:docs --color 0e8a16 --description "Merging publishes docs to Redmine (gate 2)" 2>/dev/null || true
-          {
-            echo "User guide for \`$TAG\` (agent-generated, with real screenshots)."
-            echo
-            echo "**Merging this PR fires gate 2** — \`docs-publish.yml\` publishes \`docs/user-guide/*.md\` to the Redmine wiki."
-            echo "Review the pages and the screenshots first; this is the second human gate."
-          } > /tmp/docs-pr-body.md
-          gh pr create \
-            --title "docs: user guide for $TAG" \
-            --body-file /tmp/docs-pr-body.md \
-            --base "$BASE_REF" \
-            --head "docs/$TAG" \
-            --label gate:docs
+          for f in "${pages[@]}"; do
+            page="$(basename "$f" .md)"
+            # jq -Rs reads the whole file as one JSON string — safe for any markdown.
+            code="$(jq -Rs '{wiki_page:{text:.}}' "$f" \
+              | curl -sS -o /dev/null -w "%{http_code}" -X PUT \
+                  -H "Content-Type: application/json" \
+                  -H "X-Redmine-API-Key: ${REDMINE_API_KEY}" \
+                  --data-binary @- \
+                  "${REDMINE_URL}/projects/${REDMINE_PROJECT}/wiki/${page}.json")"
+            echo "→ ${page}: HTTP ${code}"
+          done

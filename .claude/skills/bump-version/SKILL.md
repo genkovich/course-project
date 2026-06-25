@@ -48,8 +48,8 @@ This is the **"deterministic script vs agent explains, human applies"** split ma
    ```
 
    The tag is the human's action — but in this pipeline the authoritative tag is
-   cut by **gate 1** (`release.yml`) when the feature PR merges, so locally this
-   is a record/rehearsal of the same number, not the thing that fires CI.
+   cut by the **merge gate** (`release.yml`) when the release PR merges, so locally
+   this is a record/rehearsal of the same number, not the thing that fires CI.
 
 ## Definition of Done
 

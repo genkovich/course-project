@@ -29,8 +29,8 @@ leading `v`.
 
 ## Constraints
 
-- **Do not commit or push.** Edits stay in the working tree; gate 1 commits them
-  itself (alongside the bump and notes).
+- **Do not commit or push.** Edits stay in the working tree; the merge gate commits
+  them itself (alongside the notes).
 - **Do not edit anything outside `docs/`.**
 - Each bullet is one line, no trailing period.
 - Use exactly these section titles: `Added`, `Changed`, `Fixed`, `Removed`.
