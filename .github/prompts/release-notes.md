@@ -17,9 +17,11 @@ release — a short, benefit-first narrative.
    - No internal jargon, no file names, no commit hashes.
    - Each line passes the test of a reader who never saw the code.
 4. **Save the notes to `docs/release-notes/<TAG>.md`** (e.g.
-   `docs/release-notes/v0.2.0.md`) with the Write tool. That file is the
-   artifact — the merge gate reads it back as the GitHub Release body and the
-   Telegram announcement.
+   `docs/release-notes/v0.2.0.md`) with the Write tool, **overwriting** any file
+   already at that path. The name is keyed to `TAG`, so this is idempotent by
+   construction: a local rehearsal that committed the same file is replaced, never
+   duplicated. That file is the artifact — the merge gate reads it back as the
+   GitHub Release body and the Telegram announcement.
 
 ## Constraints
 

@@ -39,7 +39,7 @@ This skill is the partner half of the **bump + save** pair: `bump-version` decid
    - Lead with what the reader can now do.
    - No internal jargon, no file names, no commit hashes.
    - Each line passes the test of a reader who never saw the code.
-5. **Save the notes** to `docs/release-notes/v<version>.md` and echo them in the chat so the human reviews them next to the changelog. The file seeds the GitHub Release body; saving it is the point — it is no longer throwaway chat output.
+5. **Save the notes** to `docs/release-notes/v<version>.md`, **overwriting** any file already there, and echo them in the chat so the human reviews them next to the changelog. The path is keyed to the version, so resaving replaces — never duplicates. The file seeds the GitHub Release body; saving it is the point — it is no longer throwaway chat output.
 
 ## Definition of Done
 

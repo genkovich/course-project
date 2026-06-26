@@ -37,13 +37,14 @@ This is the manual/rehearsal half of the changelog step. The same curation runs 
    - **Group** several commits about one feature into a single bullet.
    - **Rewrite** the technical subject into plain language. Drop the `feat:` / `fix:` prefix.
 4. **Place each bullet** under one of the six Keep a Changelog categories — **Added · Changed · Deprecated · Removed · Fixed · Security** — and write them into `## [Unreleased]`. Skip any empty category. Follow `templates/changelog-entry.md`.
-5. **Keep the `## [Unreleased]` heading on top** so the next cycle repeats.
+5. **Replace `## [Unreleased]`, never append to it.** Regenerate its body from the log — if it already holds bullets from a previous run, overwrite them rather than stacking a second copy. Keep the `## [Unreleased]` heading on top so the next cycle repeats.
 
 ## Definition of Done
 
 - `## [Unreleased]` holds curated bullets under the right Keep a Changelog categories.
 - The result has **fewer lines than the raw `git log`** — noise filtered, one-feature commits grouped.
 - Each bullet is one line, plain language, no `feat:`/`fix:` prefix, no trailing period.
+- **Idempotent:** rerunning replaces the `## [Unreleased]` body — it never appends a second copy of the same bullets.
 - The edit is in the working tree only — not committed, not pushed.
 
 ## Anti-patterns

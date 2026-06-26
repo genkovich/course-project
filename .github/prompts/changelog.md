@@ -23,12 +23,23 @@ leading `v`.
    - explicit removals → **Removed**
    Rewrite each remaining subject as a short, user-facing bullet (drop the
    `feat:`/`fix:` prefix, plain language).
-4. **Promote `[Unreleased]` into the released version.** Replace the
-   `## [Unreleased]` section with a new dated heading `## [<version>] - <today>`
-   holding the curated entries, and keep a fresh empty `## [Unreleased]` on top.
+4. **Promote `[Unreleased]` into the released version — idempotently.**
+   Regenerate the entries from the `git log` above. Do **not** append to or merge
+   with whatever bullets `## [Unreleased]` already holds: a local rehearsal may
+   have committed some, but they are not authoritative — the log is. Then:
+   - If `docs/CHANGELOG.md` **already has** a `## [<version>] - …` section (a
+     prior run or a local commit promoted it), **replace that section in place** —
+     never add a second heading for the same version.
+   - Otherwise replace the `## [Unreleased]` section with a new dated heading
+     `## [<version>] - <today>` holding the curated entries.
+   - Always leave exactly one fresh, empty `## [Unreleased]` on top.
 
 ## Constraints
 
+- **Idempotent by version.** When you finish there is exactly **one**
+  `## [<version>]` heading. Running this twice on the same release — or running it
+  after a local rehearsal committed its own changelog — must converge to the same
+  file: regenerate in place, never duplicate a section or a bullet.
 - **Do not commit or push.** Edits stay in the working tree; the merge gate commits
   them itself (alongside the notes).
 - **Do not edit anything outside `docs/`.**
