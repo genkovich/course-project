@@ -6,6 +6,47 @@ export const SEED_TEMPLATES: ReadonlyArray<{ name: string; imagePath: string }> 
   { name: "Change My Mind", imagePath: "/templates/change-my-mind.svg" },
 ];
 
+// A handful of pre-tagged memes so the gallery, the tag filter, and the
+// screenshots all have data the moment the app boots — no need to save one by
+// hand first. Each references a template by name; the id is resolved at seed time.
+export const SEED_MEMES: ReadonlyArray<{
+  templateName: string;
+  topText: string;
+  bottomText: string;
+  tags: string[];
+}> = [
+  {
+    templateName: "Drake",
+    topText: "Writing tests",
+    bottomText: "Shipping on Friday",
+    tags: ["dev", "ci"],
+  },
+  {
+    templateName: "This Is Fine",
+    topText: "Prod is down",
+    bottomText: "This is fine",
+    tags: ["dev", "ops"],
+  },
+  {
+    templateName: "Two Buttons",
+    topText: "Refactor",
+    bottomText: "Rewrite from scratch",
+    tags: ["dev"],
+  },
+  {
+    templateName: "Change My Mind",
+    topText: "Tabs beat spaces",
+    bottomText: "Change my mind",
+    tags: ["fun"],
+  },
+  {
+    templateName: "Distracted Boyfriend",
+    topText: "Me",
+    bottomText: "Yet another JS framework",
+    tags: ["dev", "fun"],
+  },
+];
+
 export const SEED_CAPTIONS: ReadonlyArray<string> = [
   "When the tests finally pass",
   "Me explaining my code a week later",

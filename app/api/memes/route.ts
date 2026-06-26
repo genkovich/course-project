@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { listMemes, saveMeme } from "@/lib/db";
+import { listMemes, listMemesByTag, saveMeme } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const memes = listMemes();
+export async function GET(request: Request) {
+  const tag = new URL(request.url).searchParams.get("tag");
+  const memes = tag ? listMemesByTag(tag) : listMemes();
   return NextResponse.json({ memes });
 }
 
@@ -12,6 +13,7 @@ type SaveBody = {
   templateId?: unknown;
   topText?: unknown;
   bottomText?: unknown;
+  tags?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -42,6 +44,10 @@ export async function POST(request: Request) {
       ? body.bottomText
       : null;
 
-  const { id } = saveMeme({ templateId, topText, bottomText });
+  const tags = Array.isArray(body.tags)
+    ? body.tags.filter((t): t is string => typeof t === "string")
+    : [];
+
+  const { id } = saveMeme({ templateId, topText, bottomText, tags });
   return NextResponse.json({ ok: true, id });
 }
