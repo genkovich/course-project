@@ -1,0 +1,96 @@
+name: pr-review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# REVIEW ON OPEN — every non-draft PR gets two automated passes before a human
+# looks: /code-review (correctness + simplification) and /security-review
+# (vulnerabilities in the changed code). Both run headless via `claude -p`, the
+# same CLI the release gate uses, and post their findings back as PR comments.
+#
+# This is NOT the release gate. release.yml fires on pull_request: closed (merge)
+# and does the version/changelog/tag/publish work. This one fires on PR open/push
+# and only reads + comments — it tags, publishes, and pushes nothing.
+#
+# Note: for pull_request events GitHub runs the workflow definition from the BASE
+# branch, so this file only takes effect once it lives on the default branch.
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Skip drafts and the release gate's own bot work; review real PRs only.
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      BASE_REF: ${{ github.event.pull_request.base.ref }}
+    steps:
+      - name: Detect the Claude secret (skip the review if it is missing)
+        id: secret
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          echo "claude=$([[ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the PR branch with full history
+        if: steps.secret.outputs.claude == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Make the base branch available for diffing
+        if: steps.secret.outputs.claude == 'true'
+        run: git fetch origin "$BASE_REF":"$BASE_REF" || true
+
+      - uses: actions/setup-node@v4
+        if: steps.secret.outputs.claude == 'true'
+        with:
+          node-version: 20
+
+      - name: Install Claude Code CLI (stable)
+        if: steps.secret.outputs.claude == 'true'
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash -s stable
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Code review (claude -p /code-review)
+        if: steps.secret.outputs.claude == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          claude -p "/code-review high" \
+            --allowed-tools "Bash(git *)" "Read" "Grep" "Glob" \
+            --model claude-sonnet-4-6 \
+            --max-turns 40 \
+            | tee code-review.md
+
+      - name: Post the code review as a PR comment
+        if: steps.secret.outputs.claude == 'true'
+        run: |
+          { echo "## 🔍 Code review (\`/code-review high\`)"; echo; cat code-review.md; } > code-review-comment.md
+          gh pr comment "$PR" --body-file code-review-comment.md
+
+      - name: Security review (claude -p /security-review)
+        if: steps.secret.outputs.claude == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          claude -p "/security-review" \
+            --allowed-tools "Bash(git *)" "Read" "Grep" "Glob" \
+            --model claude-sonnet-4-6 \
+            --max-turns 40 \
+            | tee security-review.md
+
+      - name: Post the security review as a PR comment
+        if: steps.secret.outputs.claude == 'true'
+        run: |
+          { echo "## 🛡️ Security review (\`/security-review\`)"; echo; cat security-review.md; } > security-review-comment.md
+          gh pr comment "$PR" --body-file security-review-comment.md
