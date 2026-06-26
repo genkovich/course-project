@@ -1,0 +1,176 @@
+name: release
+on:
+  pull_request:
+    types: [closed]
+
+# THE GATE — merging the release PR fires the whole release. The PR already
+# carries the version bump and the user guide with real screenshots, both made
+# locally by /release (the screenshots need the running app, which CI can't
+# boot — you can). On merge, CI does the parts that need no app: changelog →
+# release notes → tag → GitHub Release → Telegram → Redmine wiki.
+#
+# It listens to pull_request: closed (merged), never push — so the changelog/
+# notes commit and the tag it pushes below (under GITHUB_TOKEN) do NOT re-fire
+# it (GitHub policy). It opens nothing, so it cannot loop. A merged PR that did
+# not bump the version is a no-op: the version in package.json IS the release
+# signal.
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.event.pull_request.merged == true &&
+      !startsWith(github.event.pull_request.head.ref, 'release/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BASE_REF: ${{ github.event.pull_request.base.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Claude Code CLI (stable)
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash -s stable
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Detect available secrets (guards for the outbound steps)
+        id: secrets
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          REDMINE_URL: ${{ secrets.REDMINE_URL }}
+          REDMINE_API_KEY: ${{ secrets.REDMINE_API_KEY }}
+          REDMINE_PROJECT: ${{ secrets.REDMINE_PROJECT }}
+        run: |
+          echo "claude=$([[ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "telegram=$([[ -n "$TELEGRAM_BOT_TOKEN" && -n "$TELEGRAM_CHAT_ID" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "redmine=$([[ -n "$REDMINE_URL" && -n "$REDMINE_API_KEY" && -n "$REDMINE_PROJECT" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Read the version from package.json (set locally by /release)
+        id: ver
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          last="$(git tag --list 'v*' --sort=-v:refname | head -n1)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          if [[ "v$version" == "$last" ]]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::package.json is still v$version (already tagged) — this merge bumped nothing, so the gate is a no-op"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::releasing $last -> v$version"
+          fi
+
+      - name: Curate the changelog (claude -p)
+        if: steps.ver.outputs.release == 'true' && steps.secrets.outputs.claude == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          claude -p "$(cat .github/prompts/changelog.md)" \
+            --allowed-tools "Bash(git log *)" "Read(docs/**)" "Edit(docs/**)" \
+            --model claude-haiku-4-5 \
+            --max-turns 6
+
+      - name: Write the release notes (claude -p)
+        if: steps.ver.outputs.release == 'true' && steps.secrets.outputs.claude == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          claude -p "$(cat .github/prompts/release-notes.md)" \
+            --allowed-tools "Bash(git log *)" "Read(docs/**)" "Read(package.json)" "Write(docs/release-notes/**)" \
+            --model claude-haiku-4-5 \
+            --max-turns 6
+
+      - name: Commit changelog + notes, tag, and push (main + tag)
+        if: steps.ver.outputs.release == 'true'
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          git add docs/CHANGELOG.md "docs/release-notes/$TAG.md" 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "::notice::nothing staged for $TAG"
+          else
+            git commit -m "chore: release $TAG (changelog, notes)"
+          fi
+          git tag "$TAG"
+          # GITHUB_TOKEN pushes do NOT re-trigger workflows — this main + tag push
+          # is inert; the gate will not fire on itself.
+          git push origin "HEAD:$BASE_REF"
+          git push origin "$TAG"
+
+      - name: Publish the GitHub Release
+        if: steps.ver.outputs.release == 'true'
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          notes="docs/release-notes/$TAG.md"
+          if [[ -s "$notes" ]]; then
+            gh release create "$TAG" --title "$TAG" --notes-file "$notes"
+          else
+            # No agent notes (e.g. CLAUDE_CODE_OAUTH_TOKEN missing) — let GitHub
+            # build notes from merged PRs (.github/release.yml maps labels).
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
+
+      - name: Announce on Telegram (guarded)
+        if: steps.ver.outputs.release == 'true' && steps.secrets.outputs.telegram == 'true'
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          notes="docs/release-notes/$TAG.md"
+          body="$([[ -s "$notes" ]] && cat "$notes" || echo "Released $TAG")"
+          # Telegram caps a message at 4096 chars; keep headroom.
+          body="${body:0:3500}"
+          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${body}" \
+            -o /dev/null -w "telegram: %{http_code}\n"
+
+      - name: Publish the user guide to the Redmine wiki (guarded)
+        if: steps.ver.outputs.release == 'true' && steps.secrets.outputs.redmine == 'true'
+        env:
+          REDMINE_URL: ${{ secrets.REDMINE_URL }}
+          REDMINE_API_KEY: ${{ secrets.REDMINE_API_KEY }}
+          REDMINE_PROJECT: ${{ secrets.REDMINE_PROJECT }}
+        run: |
+          # The user guide is already in the repo — it rode in on the merged PR,
+          # reviewed there. The merge IS its gate, so we publish it now. No re-shoot.
+          shopt -s nullglob
+          pages=(docs/user-guide/*.md)
+          if [[ ${#pages[@]} -eq 0 ]]; then
+            echo "::notice::no docs/user-guide/*.md to publish"
+            exit 0
+          fi
+          for f in "${pages[@]}"; do
+            page="$(basename "$f" .md)"
+            # jq -Rs reads the whole file as one JSON string — safe for any markdown.
+            code="$(jq -Rs '{wiki_page:{text:.}}' "$f" \
+              | curl -sS -o /dev/null -w "%{http_code}" -X PUT \
+                  -H "Content-Type: application/json" \
+                  -H "X-Redmine-API-Key: ${REDMINE_API_KEY}" \
+                  --data-binary @- \
+                  "${REDMINE_URL}/projects/${REDMINE_PROJECT}/wiki/${page}.json")"
+            echo "→ ${page}: HTTP ${code}"
+          done

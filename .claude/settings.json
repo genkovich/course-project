@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "BASH_DEFAULT_TIMEOUT_MS": "300000",
+    "BASH_MAX_OUTPUT_LENGTH": "50000",
+    "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "1"
+  },
+  "permissions": {
+    "allow": [
+      "Agent(Explore)",
+      "Bash(cat *)",
+      "Bash(docker *)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(CLAUDE.bak.md)"
+    ]
+  },
+  "enabledPlugins": {
+    "codex@openai-codex": true
+  },
+  "sandbox": {
+    "enabled": true,
+    "network": {
+      "allowedDomains": [
+        "github.com",
+        "google.com"
+      ],
+      "allowManagedDomainsOnly": false
+    },
+    "filesystem": {
+      "allowWrite": [
+        "/tmp/build"
+      ],
+      "denyRead": [
+        "~/.ssh",
+        "~/.aws"
+      ]
+    },
+    "excludedCommands": [
+      "docker",
+      "watchman"
+    ]
+  }
+}
