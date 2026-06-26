@@ -1,10 +1,19 @@
 import Link from "next/link";
-import { listMemes } from "@/lib/db";
+import { listMemes, listMemesByTag } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export default function GalleryPage() {
-  const memes = listMemes();
+export default async function GalleryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tag?: string }>;
+}) {
+  const { tag } = await searchParams;
+  const activeTag = tag?.trim().toLowerCase() || null;
+  const memes = activeTag ? listMemesByTag(activeTag) : listMemes();
+
+  // Every tag in use, for the filter bar.
+  const allTags = [...new Set(listMemes().flatMap((m) => m.tags))].sort();
 
   return (
     <main className="flex min-h-screen flex-col gap-6 bg-zinc-50 px-4 py-10 dark:bg-zinc-950">
@@ -20,10 +29,40 @@ export default function GalleryPage() {
         </Link>
       </header>
 
+      {allTags.length > 0 && (
+        <nav className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-2">
+          <Link
+            href="/gallery"
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              activeTag === null
+                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                : "border border-zinc-300 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            }`}
+          >
+            All
+          </Link>
+          {allTags.map((t) => (
+            <Link
+              key={t}
+              href={`/gallery?tag=${encodeURIComponent(t)}`}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                activeTag === t
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "border border-zinc-300 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              }`}
+            >
+              #{t}
+            </Link>
+          ))}
+        </nav>
+      )}
+
       <section className="mx-auto w-full max-w-5xl">
         {memes.length === 0 ? (
           <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
-            No memes saved yet. Generate one and hit Save.
+            {activeTag
+              ? `No memes tagged #${activeTag} yet.`
+              : "No memes saved yet. Generate one and hit Save."}
           </p>
         ) : (
           <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -50,9 +89,26 @@ export default function GalleryPage() {
                     </p>
                   )}
                 </div>
-                <div className="flex items-center justify-between px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400">
-                  <span>#{meme.id} · {meme.template_name}</span>
-                  <time>{new Date(meme.created_at).toLocaleString()}</time>
+                <div className="flex flex-col gap-1 px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  <div className="flex items-center justify-between">
+                    <span>
+                      #{meme.id} · {meme.template_name}
+                    </span>
+                    <time>{new Date(meme.created_at).toLocaleString()}</time>
+                  </div>
+                  {meme.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {meme.tags.map((t) => (
+                        <Link
+                          key={t}
+                          href={`/gallery?tag=${encodeURIComponent(t)}`}
+                          className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                        >
+                          #{t}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </li>
             ))}
