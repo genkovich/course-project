@@ -88,7 +88,7 @@ jobs:
           claude -p "$(cat .github/prompts/changelog.md)" \
             --allowed-tools "Bash(git log *)" "Read(docs/**)" "Edit(docs/**)" \
             --model claude-haiku-4-5 \
-            --max-turns 6
+            --max-turns 15
 
       - name: Write the release notes (claude -p)
         if: steps.ver.outputs.release == 'true' && steps.secrets.outputs.claude == 'true'
@@ -99,7 +99,7 @@ jobs:
           claude -p "$(cat .github/prompts/release-notes.md)" \
             --allowed-tools "Bash(git log *)" "Read(docs/**)" "Read(package.json)" "Write(docs/release-notes/**)" \
             --model claude-haiku-4-5 \
-            --max-turns 6
+            --max-turns 15
 
       - name: Commit changelog + notes, tag, and push (main + tag)
         if: steps.ver.outputs.release == 'true'
