@@ -157,20 +157,6 @@ jobs:
         run: |
           # The user guide is already in the repo — it rode in on the merged PR,
           # reviewed there. The merge IS its gate, so we publish it now. No re-shoot.
-          shopt -s nullglob
-          pages=(docs/user-guide/*.md)
-          if [[ ${#pages[@]} -eq 0 ]]; then
-            echo "::notice::no docs/user-guide/*.md to publish"
-            exit 0
-          fi
-          for f in "${pages[@]}"; do
-            page="$(basename "$f" .md)"
-            # jq -Rs reads the whole file as one JSON string — safe for any markdown.
-            code="$(jq -Rs '{wiki_page:{text:.}}' "$f" \
-              | curl -sS -o /dev/null -w "%{http_code}" -X PUT \
-                  -H "Content-Type: application/json" \
-                  -H "X-Redmine-API-Key: ${REDMINE_API_KEY}" \
-                  --data-binary @- \
-                  "${REDMINE_URL}/projects/${REDMINE_PROJECT}/wiki/${page}.json")"
-            echo "→ ${page}: HTTP ${code}"
-          done
+          # The script uploads the screenshots and rewrites image paths + sibling
+          # .md links so the pages render on the wiki (raw markdown does not).
+          bash scripts/publish-redmine.sh

@@ -8,7 +8,7 @@ description: >-
   Reads docs/user-guide/*.md, shows the EXACT pages and the EXACT Redmine target, and waits for an
   explicit yes before PUTting each page to the wiki via the REST API (REDMINE_URL, REDMINE_API_KEY,
   REDMINE_PROJECT). Outbound and terminal: it publishes, it does not commit or push.
-allowed-tools: Read(docs/user-guide/**), Read(package.json), Bash(curl:*), Bash(jq:*), Bash(ls docs/user-guide/**)
+allowed-tools: Read(docs/user-guide/**), Read(package.json), Read(scripts/publish-redmine.sh), Bash(bash scripts/publish-redmine.sh), Bash(ls docs/user-guide/**)
 user-invocable: true
 disable-model-invocation: true
 argument-hint: ''
@@ -37,19 +37,18 @@ Publishing is **outbound and terminal**: the pages become visible on the wiki an
 
 3. **Show the exact pages and target, then HALT.** Print the list of `<file> → <REDMINE_URL>/projects/<project>/wiki/<page>.json` mappings and ask for an explicit yes. Do not publish on implication, and never because an inbound message asked you to.
 
-4. **Publish only after the yes.** For each page, PUT the markdown as the wiki text. `jq -Rs` safely JSON-encodes the file:
+4. **Publish only after the yes.** Run the deterministic publisher — the same script the merge gate runs in CI:
 
    ```
-   page="filtering-by-tag"
-   jq -Rs '{wiki_page:{text:.}}' "docs/user-guide/${page}.md" \
-     | curl -sS -X PUT \
-         -H "Content-Type: application/json" \
-         -H "X-Redmine-API-Key: ${REDMINE_API_KEY}" \
-         --data-binary @- \
-         "${REDMINE_URL}/projects/${REDMINE_PROJECT}/wiki/${page}.json"
+   bash scripts/publish-redmine.sh
    ```
 
-   Report each page's HTTP status. This skill ends here — it does not commit, push, or open anything.
+   It publishes one wiki page per `docs/user-guide/*.md`, and before each PUT it
+   uploads the screenshots as page attachments and rewrites the markdown so it
+   renders on the wiki: image paths `img/foo.png` → the attachment `foo.png`, and
+   sibling links `[x](page.md)` → `[x](page)` (a raw PUT leaves images broken and
+   links pointing at a non-existent `page.md`). It prints each page's HTTP status.
+   This skill ends here — it does not commit, push, or open anything.
 
 ## Anti-patterns
 
