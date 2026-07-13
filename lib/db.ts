@@ -27,7 +27,8 @@ export type MemeWithTemplate = Meme & {
   template_image_path: string;
 };
 
-const DB_PATH = path.join(process.cwd(), "data.db");
+const DB_PATH =
+  process.env.DB_PATH ?? path.join(process.cwd(), "data.db");
 
 let dbInstance: Database.Database | null = null;
 
