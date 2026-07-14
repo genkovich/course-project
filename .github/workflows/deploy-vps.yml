@@ -27,12 +27,17 @@ jobs:
         run: |
           docker version
           docker compose version
+          python3 --version
+          jq --version
 
-      - name: Build and deploy locally on the VPS
+      - name: Build and deploy app plus observability
         env:
           RELEASE_SHA: ${{ github.sha }}
         run: |
-          docker compose --env-file .env.vps.example -f compose.vps.yml \
+          docker compose \
+            --env-file "$HOME/.config/course-project/observability.env" \
+            -f compose.vps.yml \
+            -f compose.observability.yml \
             up -d --build --remove-orphans
 
       - name: Wait for the public health endpoint
@@ -45,9 +50,18 @@ jobs:
             echo "Healthcheck attempt $attempt/30 failed; waiting 2 seconds"
             sleep 2
           done
-          docker compose -f compose.vps.yml logs --tail=100 app
+          docker compose \
+            --env-file "$HOME/.config/course-project/observability.env" \
+            -f compose.vps.yml \
+            -f compose.observability.yml \
+            logs --tail=100 app
           exit 1
 
       - name: Show the final container state
         if: always()
-        run: docker compose -f compose.vps.yml ps
+        run: |
+          docker compose \
+            --env-file "$HOME/.config/course-project/observability.env" \
+            -f compose.vps.yml \
+            -f compose.observability.yml \
+            ps
