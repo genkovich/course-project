@@ -10,6 +10,8 @@ export async function GET() {
     const top = getRandomCaption();
     const bottom = getRandomCaption();
 
+    throw new Error("DEMO_RELEASE_BUG");
+
     return NextResponse.json({
       template: {
         id: template.id,
