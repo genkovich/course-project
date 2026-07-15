@@ -20,6 +20,12 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## API
+
+- `GET /api/memes` — lists saved memes, optionally filtered by a `tag` query parameter.
+- `POST /api/memes` — saves a generated meme (template id, captions, and tags) to the database.
+- `GET /api/memes/random` — returns a random meme template together with random top and bottom captions.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
